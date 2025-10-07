@@ -175,8 +175,11 @@ def process_excel_simple(file_path):
             ref_cell = worksheet.cell(row=row_num, column=ref_column)
             if ref_cell.value and str(ref_cell.value).strip():
                 ref_value = str(ref_cell.value).strip()
-                # Verifica se é uma REF válida (contém letras)
-                if ref_value and any(c.isalpha() for c in ref_value):
+                # Verifica se é uma REF válida (contém letras E números, exclui cabeçalhos)
+                if (ref_value and 
+                    any(c.isalpha() for c in ref_value) and 
+                    any(c.isdigit() for c in ref_value) and
+                    ref_value.upper() not in ['REF', 'REFERENCIA', 'REFERÊNCIA', 'CÓDIGO', 'CODIGO', 'TOTAL', 'SUBTOTAL']):
                     all_refs.append({
                         'row': row_num,
                         'ref': ref_value,
