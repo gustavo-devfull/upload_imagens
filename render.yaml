@@ -5,7 +5,7 @@
 buildCommand: pip install -r requirements.txt
 
 # Comando de start
-startCommand: gunicorn server:app --bind 0.0.0.0:$PORT
+startCommand: python app.py
 
 # Variáveis de ambiente necessárias
 # Configure estas no painel do Render:
