@@ -5,7 +5,7 @@ WSGI entry point for Render deployment
 """
 
 import os
-from app_render import app
+from app_simple_render import app
 
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 8080))
