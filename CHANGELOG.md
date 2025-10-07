@@ -2,6 +2,27 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2.2.0] - 2025-10-07
+
+### 🎯 Adicionado
+- **Detecção específica** para planilhas reais (linha 4)
+- **Validação de REF** (deve conter letras)
+- **Detecção de imagens embutidas** na coluna H
+- **Associação perfeita** REF ↔ Imagem embutida
+- **Logs detalhados** de cada REF encontrada
+- **Cobertura completa** de todas as imagens disponíveis
+
+### 🔧 Melhorado
+- **Detecção de REFs** agora começa na linha 4
+- **Validação de formato** de REF (SJ0001, SJ0002, etc.)
+- **Associação direta** de imagens embutidas
+- **Logs mais informativos** sobre descoberta de REFs
+
+### 🐛 Corrigido
+- **Problema de detecção** de REFs nas linhas erradas
+- **Associação incorreta** de imagens embutidas
+- **Cobertura incompleta** de imagens disponíveis
+
 ## [2.0.0] - 2025-01-07
 
 ### ✨ Adicionado

@@ -94,9 +94,10 @@ FLASK_ENV=production
 ```
 
 ### 📊 Formato do Excel
-- **Coluna A:** REF (referência do produto)
-- **Coluna H:** Imagens (URLs ou imagens inseridas)
+- **Coluna A:** REF (referência do produto) - **SJ0001, SJ0002, etc.**
+- **Coluna H:** Imagens embutidas diretamente nas células
 - **Início:** Linha 4 (linhas 1-3 são cabeçalhos)
+- **Detecção:** Automática de REFs válidos (contém letras)
 
 ## 🛠️ API Endpoints
 
