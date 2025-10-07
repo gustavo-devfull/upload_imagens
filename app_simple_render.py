@@ -70,11 +70,33 @@ def process_excel_simple(file_path):
                 img_col = image.anchor._from.col + 1
                 image_map[img_row] = img_col
         
-        # Processa a partir da linha 4 (índice 3) - limitado para evitar travamento
+        # Determina a linha de início baseada na presença de REF
+        start_row = 2  # Começa na linha 2
+        ref_found_in_row2 = False
+        
+        # Verifica se há REF na linha 2
+        ref_cell_row2 = worksheet[f'A2']
+        if ref_cell_row2.value and str(ref_cell_row2.value).strip():
+            ref_found_in_row2 = True
+            logger.info(f"REF encontrado na linha 2: {ref_cell_row2.value}")
+        else:
+            logger.info("Nenhum REF encontrado na linha 2, verificando linha 3")
+            # Se não há REF na linha 2, verifica linha 3
+            ref_cell_row3 = worksheet[f'A3']
+            if ref_cell_row3.value and str(ref_cell_row3.value).strip():
+                start_row = 3
+                logger.info(f"REF encontrado na linha 3: {ref_cell_row3.value}")
+            else:
+                logger.info("Nenhum REF encontrado na linha 3, usando linha 4 como padrão")
+                start_row = 4
+        
+        logger.info(f"Iniciando processamento a partir da linha {start_row}")
+        
+        # Processa a partir da linha determinada - limitado para evitar travamento
         max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
         logger.info(f"Processando até linha {max_rows} (máximo 100 linhas)")
         
-        for row_num in range(4, max_rows + 1):
+        for row_num in range(start_row, max_rows + 1):
             ref_cell = worksheet[f'A{row_num}']
             photo_cell = worksheet[f'H{row_num}']
             
