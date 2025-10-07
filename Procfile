@@ -1,1 +1,1 @@
-web: python app_render.py
+web: python wsgi.py

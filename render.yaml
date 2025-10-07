@@ -1,15 +1,15 @@
-# Render Deploy Configuration
-# Este arquivo configura o deploy automático no Render
-
-# Comando de build
-buildCommand: pip install -r requirements.txt
-
-# Comando de start
-startCommand: python app_render.py
-
-# Variáveis de ambiente necessárias
-# Configure estas no painel do Render:
-# FTP_HOST=46.202.90.62
-# FTP_USER=u715606397.ideolog.ia.br
-# FTP_PASSWORD=]X9CC>t~ihWhdzNq
-# FLASK_ENV=production
+services:
+  - type: web
+    name: upload-imagens
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python wsgi.py
+    envVars:
+      - key: FTP_HOST
+        value: 46.202.90.62
+      - key: FTP_USER
+        value: u715606397.ideolog.ia.br
+      - key: FTP_PASSWORD
+        value: "]X9CC>t~ihWhdzNq"
+      - key: FLASK_ENV
+        value: production
