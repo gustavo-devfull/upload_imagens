@@ -893,7 +893,7 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
 
 def start_render_server():
     """Inicia o servidor Render"""
-    port = int(os.getenv('PORT', 8082))  # Porta diferente para evitar conflito
+    port = int(os.getenv('PORT', 8083))  # Porta diferente para evitar conflito
     
     print("🚀 Iniciando Sistema Render...")
     print("=" * 50)
