@@ -9,8 +9,15 @@ from werkzeug.utils import secure_filename
 import os
 import tempfile
 import json
-from upload_ftp_corrigido import FTPImageExtractorCorrigido
 import logging
+
+# Importação condicional para evitar erros no Railway
+try:
+    from upload_ftp_corrigido import FTPImageExtractorCorrigido
+    FTP_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"FTP module not available: {e}")
+    FTP_AVAILABLE = False
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -48,6 +55,10 @@ def serve_frontend():
 def upload_file():
     """Processa upload de arquivo Excel"""
     try:
+        # Verifica se FTP está disponível
+        if not FTP_AVAILABLE:
+            return jsonify({'error': 'Sistema FTP não disponível no momento'}), 503
+        
         # Verifica se há arquivo na requisição
         if 'excel_file' not in request.files:
             return jsonify({'error': 'Nenhum arquivo enviado'}), 400
@@ -87,8 +98,6 @@ def upload_file():
             
             # Adiciona informações das imagens processadas
             if stats['uploads_successful'] > 0:
-                # Lista arquivos no diretório de uploads para obter URLs
-                # Nota: Em produção, você pode querer manter um registro das imagens processadas
                 response_data['images'] = [
                     {
                         'name': 'Imagem processada',
