@@ -52,6 +52,14 @@ def process_excel_simple(file_path):
             'errors': []
         }
         
+        # Log das imagens encontradas na planilha
+        logger.info(f"Total de imagens inseridas na planilha: {len(worksheet._images)}")
+        for i, image in enumerate(worksheet._images):
+            if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
+                img_row = image.anchor._from.row + 1
+                img_col = image.anchor._from.col + 1
+                logger.info(f"Imagem {i+1}: linha {img_row}, coluna {img_col}")
+        
         # Processa a partir da linha 4 (índice 3)
         for row_num in range(4, worksheet.max_row + 1):
             ref_cell = worksheet[f'A{row_num}']
@@ -59,19 +67,57 @@ def process_excel_simple(file_path):
             
             if ref_cell.value:
                 results['total_refs'] += 1
+                logger.info(f"Processando linha {row_num}: REF = {ref_cell.value}")
                 
-                # Verifica se há imagem na coluna H
-                if photo_cell.value:
+                # Verifica se há imagem na coluna H usando diferentes métodos
+                image_found = False
+                image_source = ""
+                
+                # Método 1: Verifica se a célula tem valor (texto/URL)
+                if photo_cell.value and str(photo_cell.value).strip():
+                    image_found = True
+                    image_source = f"valor da célula: {photo_cell.value}"
+                    logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                
+                # Método 2: Verifica se há imagens inseridas na planilha
+                if not image_found:
+                    # Procura por imagens na área da célula H
+                    for image in worksheet._images:
+                        # Verifica se a imagem está próxima da linha atual
+                        if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
+                            img_row = image.anchor._from.row + 1  # +1 porque Excel é 1-indexed
+                            img_col = image.anchor._from.col + 1
+                            
+                            # Se a imagem está na coluna H (8) e próxima da linha atual
+                            if img_col == 8 and abs(img_row - row_num) <= 2:
+                                image_found = True
+                                image_source = f"imagem inserida na linha {img_row}"
+                                logger.info(f"Imagem inserida encontrada na linha {row_num} ({image_source})")
+                                break
+                
+                # Método 3: Verifica células adjacentes (G, I)
+                if not image_found:
+                    for col_offset in [-1, 1]:  # Coluna G e I
+                        adj_cell = worksheet.cell(row=row_num, column=8 + col_offset)
+                        if adj_cell.value and str(adj_cell.value).strip():
+                            image_found = True
+                            image_source = f"célula adjacente {chr(65 + 7 + col_offset)}{row_num}: {adj_cell.value}"
+                            logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                            break
+                
+                if image_found:
                     results['images_found'] += 1
                     
                     # Simula processamento (sem upload real)
                     try:
                         # Aqui seria o processamento real da imagem
                         results['uploads_successful'] += 1
-                        logger.info(f"REF {ref_cell.value} (linha {row_num}) processada com sucesso")
+                        logger.info(f"✅ REF {ref_cell.value} (linha {row_num}) processada com sucesso - {image_source}")
                     except Exception as e:
                         results['uploads_failed'] += 1
                         results['errors'].append(f"Erro na linha {row_num}: {str(e)}")
+                else:
+                    logger.info(f"❌ Nenhuma imagem encontrada na linha {row_num} para REF {ref_cell.value}")
         
         return results
         
