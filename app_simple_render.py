@@ -283,9 +283,9 @@ def process_excel_simple(file_path):
                                     
                                     break
                     else:
-                        # Se não encontrou imagem embutida, apenas conta como encontrada
-                        results['uploads_successful'] += 1
-                        logger.info(f"✅ REF {ref_value} (linha {row_num}) processada com sucesso - {image_source}")
+                        # Se não encontrou imagem embutida, não conta como upload bem-sucedido
+                        results['uploads_failed'] += 1
+                        logger.warning(f"⚠️ REF {ref_value} (linha {row_num}) - imagem encontrada mas não foi possível extrair dados")
                         
                 except Exception as e:
                     logger.error(f"Erro ao processar imagem para REF {ref_value}: {e}")
