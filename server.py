@@ -38,7 +38,11 @@ def allowed_file(filename):
 @app.route('/')
 def serve_frontend():
     """Serve o frontend React"""
-    return send_from_directory('.', 'frontend.html')
+    try:
+        return send_from_directory('.', 'frontend.html')
+    except Exception as e:
+        logger.error(f"Erro ao servir frontend: {e}")
+        return jsonify({'status': 'ok', 'message': 'Servidor funcionando', 'frontend_error': str(e)}), 200
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -114,7 +118,7 @@ def upload_file():
 @app.route('/health')
 def health_check():
     """Endpoint de verificação de saúde"""
-    return jsonify({'status': 'ok', 'message': 'Servidor funcionando'})
+    return jsonify({'status': 'ok', 'message': 'Servidor funcionando'}), 200
 
 @app.route('/config')
 def get_config():
@@ -154,10 +158,19 @@ if __name__ == '__main__':
     print(f"💚 Health Check: http://localhost:{port}/health")
     print(f"⚙️  Config: http://localhost:{port}/config")
     print(f"🌍 Ambiente: {'Produção' if not debug else 'Desenvolvimento'}")
+    print(f"🔧 Porta: {port}")
     print()
     
     # Cria diretório de uploads se não existir
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    try:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        print(f"✅ Diretório de uploads criado: {UPLOAD_FOLDER}")
+    except Exception as e:
+        print(f"⚠️  Erro ao criar diretório de uploads: {e}")
     
     # Inicia servidor
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    try:
+        app.run(host='0.0.0.0', port=port, debug=debug)
+    except Exception as e:
+        print(f"❌ Erro ao iniciar servidor: {e}")
+        raise
