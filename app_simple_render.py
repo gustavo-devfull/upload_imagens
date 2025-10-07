@@ -58,34 +58,15 @@ def upload_to_ftp(local_file_path: str, remote_filename: str) -> bool:
             ftp.connect(FTP_HOST, 21)
             ftp.login(FTP_USER, FTP_PASSWORD)
             
-            # Navega para o diretório correto
-            ftp.cwd('public_html')
+            # Navega diretamente para o diretório correto
+            ftp.cwd('/public_html/images/products')
+            logger.info(f"Diretório atual: {ftp.pwd()}")
             
-            # Cria diretórios se necessário
-            try:
-                ftp.mkd('images')
-                logger.debug("Diretório 'images' criado")
-            except:
-                logger.debug("Diretório 'images' já existe")
-            
-            try:
-                ftp.cwd('images')
-                ftp.mkd('products')
-                logger.debug("Diretório 'products' criado")
-            except:
-                logger.debug("Diretório 'products' já existe")
-            
-            # Volta para o diretório raiz
-            ftp.cwd('/')
-            
-            # Caminho completo para upload
-            remote_path = f"public_html/images/products/{remote_filename}"
-            
-            # Abre arquivo local e faz upload
+            # Abre arquivo local e faz upload diretamente
             with open(local_file_path, 'rb') as file:
-                ftp.storbinary(f'STOR {remote_path}', file)
+                ftp.storbinary(f'STOR {remote_filename}', file)
                 
-        logger.info(f"Upload FTP concluído: {remote_path}")
+        logger.info(f"Upload FTP concluído: {remote_filename}")
         logger.info(f"Imagem disponível em: https://ideolog.ia.br/images/products/{remote_filename}")
         return True
         
