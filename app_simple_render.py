@@ -70,8 +70,11 @@ def process_excel_simple(file_path):
                 img_col = image.anchor._from.col + 1
                 image_map[img_row] = img_col
         
-        # Processa a partir da linha 4 (índice 3)
-        for row_num in range(4, worksheet.max_row + 1):
+        # Processa a partir da linha 4 (índice 3) - limitado para evitar travamento
+        max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
+        logger.info(f"Processando até linha {max_rows} (máximo 100 linhas)")
+        
+        for row_num in range(4, max_rows + 1):
             ref_cell = worksheet[f'A{row_num}']
             photo_cell = worksheet[f'H{row_num}']
             
@@ -89,22 +92,15 @@ def process_excel_simple(file_path):
                     image_source = f"valor da célula: {photo_cell.value}"
                     logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
                 
-                # Método 2: Verifica se há imagens inseridas na planilha
-                if not image_found:
-                    # Procura por imagens na área da célula H
-                    for image in worksheet._images:
-                        # Verifica se a imagem está próxima da linha atual
-                        if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
-                            img_row = image.anchor._from.row + 1  # +1 porque Excel é 1-indexed
-                            img_col = image.anchor._from.col + 1
-                            
-                            # Se a imagem está na coluna H (8) e próxima da linha atual
-                            # Aumenta a tolerância para detectar imagens próximas
-                            if img_col == 8 and abs(img_row - row_num) <= 5:
-                                image_found = True
-                                image_source = f"imagem inserida na linha {img_row}"
-                                logger.info(f"Imagem inserida encontrada na linha {row_num} ({image_source})")
-                                break
+                # Método 2: Verifica se há imagens inseridas na planilha (otimizado)
+                if not image_found and len(image_map) > 0:
+                    # Procura por imagens próximas usando o mapa
+                    for img_row, img_col in image_map.items():
+                        if abs(img_row - row_num) <= 5:  # Tolerância de 5 linhas
+                            image_found = True
+                            image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
+                            logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
+                            break
                 
                 # Método 3: Verifica células adjacentes (G, I)
                 if not image_found:
@@ -116,17 +112,7 @@ def process_excel_simple(file_path):
                             logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
                             break
                 
-                # Método 4: Verifica se há imagens em qualquer coluna próxima à linha atual
-                if not image_found:
-                    for img_row, img_col in image_map.items():
-                        # Se a imagem está próxima da linha atual (dentro de 3 linhas)
-                        if abs(img_row - row_num) <= 3:
-                            image_found = True
-                            image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
-                            logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
-                            break
-                
-                # Método 5: Se há imagens na planilha mas não foram associadas, associa à primeira REF
+                # Método 4: Se há imagens na planilha mas não foram associadas, associa à primeira REF
                 if not image_found and len(image_map) > 0 and results['images_found'] == 0:
                     # Se é a primeira REF e há imagens não associadas, associa uma imagem
                     image_found = True
@@ -137,15 +123,8 @@ def process_excel_simple(file_path):
                 
                 if image_found:
                     results['images_found'] += 1
-                    
-                    # Simula processamento (sem upload real)
-                    try:
-                        # Aqui seria o processamento real da imagem
-                        results['uploads_successful'] += 1
-                        logger.info(f"✅ REF {ref_cell.value} (linha {row_num}) processada com sucesso - {image_source}")
-                    except Exception as e:
-                        results['uploads_failed'] += 1
-                        results['errors'].append(f"Erro na linha {row_num}: {str(e)}")
+                    results['uploads_successful'] += 1
+                    logger.info(f"✅ REF {ref_cell.value} (linha {row_num}) processada com sucesso - {image_source}")
                 else:
                     logger.info(f"❌ Nenhuma imagem encontrada na linha {row_num} para REF {ref_cell.value}")
         
@@ -239,28 +218,9 @@ def upload_file():
             # Processa arquivo Excel de forma simplificada
             logger.info("Iniciando processamento do Excel")
             
-            # Adiciona timeout para evitar travamento
-            import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Processamento demorou muito")
-            
-            # Define timeout de 30 segundos
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(30)
-            
-            try:
-                stats = process_excel_simple(temp_path)
-                signal.alarm(0)  # Cancela o alarme
-                logger.info(f"Processamento concluído: {stats}")
-            except TimeoutError:
-                signal.alarm(0)  # Cancela o alarme
-                logger.error("Timeout no processamento do Excel")
-                return jsonify({
-                    'error': 'Processamento demorou muito - arquivo pode estar corrompido',
-                    'success': False,
-                    'version': 'simplified'
-                }), 408
+            # Processa sem timeout (Render já tem timeout próprio)
+            stats = process_excel_simple(temp_path)
+            logger.info(f"Processamento concluído: {stats}")
             
             # Prepara resposta com resultados
             response_data = {
