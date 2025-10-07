@@ -153,8 +153,30 @@ def process_excel_simple(file_path):
                     logger.info(f"✅ Coluna REF encontrada na linha 3, coluna {chr(64 + col)} ({col})")
                     break
         
+        # Se ainda não encontrou, procura por padrões de REF nas primeiras linhas
         if ref_column is None:
-            logger.warning("⚠️ Coluna REF não encontrada nas linhas 2 ou 3. Usando coluna A como padrão.")
+            logger.info("🔍 Procurando padrões de REF nas primeiras linhas...")
+            for row in range(1, 6):  # Procura nas primeiras 5 linhas
+                for col in range(1, worksheet.max_column + 1):
+                    cell_value = worksheet.cell(row=row, column=col).value
+                    if cell_value and str(cell_value).strip():
+                        cell_str = str(cell_value).strip()
+                        # Procura por padrões como SJ0001, CHDJ25001, etc.
+                        if len(cell_str) >= 3 and any(c.isalpha() for c in cell_str) and any(c.isdigit() for c in cell_str):
+                            # Verifica se a próxima linha também tem um padrão similar
+                            next_cell = worksheet.cell(row=row+1, column=col).value
+                            if next_cell and str(next_cell).strip():
+                                next_str = str(next_cell).strip()
+                                if len(next_str) >= 3 and any(c.isalpha() for c in next_str) and any(c.isdigit() for c in next_str):
+                                    ref_column = col
+                                    ref_header_row = row - 1 if row > 1 else 1
+                                    logger.info(f"✅ Padrão REF detectado na linha {row}, coluna {chr(64 + col)} ({col})")
+                                    break
+                if ref_column is not None:
+                    break
+        
+        if ref_column is None:
+            logger.warning("⚠️ Coluna REF não encontrada. Usando coluna A como padrão.")
             ref_column = 1
             ref_header_row = 3
         
