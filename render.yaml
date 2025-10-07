@@ -1,15 +1,11 @@
 services:
   - type: web
-    name: upload-imagens
+    name: sistema-upload-excel
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python wsgi.py
+    startCommand: python sistema_deploy.py
     envVars:
-      - key: FTP_HOST
-        value: 46.202.90.62
-      - key: FTP_USER
-        value: u715606397.ideolog.ia.br
-      - key: FTP_PASSWORD
-        value: "]X9CC>t~ihWhdzNq"
-      - key: FLASK_ENV
-        value: production
+      - key: PORT
+        value: 8080
+      - key: PYTHON_VERSION
+        value: 3.11.0
