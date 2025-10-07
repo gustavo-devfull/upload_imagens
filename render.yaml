@@ -4,7 +4,7 @@ services:
     env: python
     pythonVersion: 3.11.9
     buildCommand: pip install --upgrade pip && pip install -r requirements_simples.txt
-    startCommand: python sistema_simples.py
+    startCommand: python sistema_render.py
     envVars:
       - key: PORT
         value: 8080
