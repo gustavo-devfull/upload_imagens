@@ -195,3 +195,4 @@ Para problemas:
 
 **Desenvolvido para funcionar diretamente no servidor FTP** 🚀
 
+

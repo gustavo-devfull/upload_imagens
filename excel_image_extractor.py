@@ -169,57 +169,98 @@ class ExcelImageExtractor:
             logger.debug(f"Tipo do objeto image: {type(image)}")
             
             # Tenta diferentes métodos de salvamento
-            if hasattr(image, 'save') and callable(getattr(image, 'save')):
-                # Método direto
-                image.save(temp_path)
-            elif hasattr(image, 'image') and hasattr(image.image, 'save') and callable(getattr(image.image, 'save')):
-                # Método através de image.image
-                image.image.save(temp_path)
-            elif hasattr(image, '_data'):
-                # Método usando dados brutos
-                data = image._data
-                if callable(data):
-                    data = data()  # Se for um método, chama ele
-                with open(temp_path, 'wb') as f:
-                    f.write(data)
-                    f.flush()  # Força escrita no disco
-            elif hasattr(image, 'ref'):
-                # Método usando referência
-                data = image.ref
-                if callable(data):
-                    data = data()
-                with open(temp_path, 'wb') as f:
-                    f.write(data)
-                    f.flush()  # Força escrita no disco
-            else:
-                # Último recurso: tentar obter dados de diferentes formas
+            success = False
+            
+            # Método 1: Usando dados brutos (_data) - MÉTODO PRINCIPAL
+            if hasattr(image, '_data') and not success:
+                try:
+                    data = image._data
+                    if callable(data):
+                        data = data()  # Se for um método, chama ele
+                    
+                    if isinstance(data, bytes) and len(data) > 0:
+                        with open(temp_path, 'wb') as f:
+                            f.write(data)
+                            f.flush()
+                        success = True
+                        logger.debug("Imagem salva usando _data")
+                except Exception as e:
+                    logger.debug(f"Erro ao salvar usando _data: {e}")
+            
+            # Método 2: Usando ref (BytesIO) - APENAS SE _data FALHAR
+            if hasattr(image, 'ref') and not success:
+                try:
+                    ref_obj = image.ref
+                    if hasattr(ref_obj, 'read'):
+                        # É um BytesIO, mas pode estar fechado
+                        try:
+                            ref_obj.seek(0)  # Volta para o início
+                            data = ref_obj.read()
+                            if isinstance(data, bytes) and len(data) > 0:
+                                with open(temp_path, 'wb') as f:
+                                    f.write(data)
+                                    f.flush()
+                                success = True
+                                logger.debug("Imagem salva usando ref (BytesIO)")
+                        except ValueError:
+                            # BytesIO fechado, pula este método
+                            logger.debug("BytesIO fechado, pulando método ref")
+                    elif callable(ref_obj):
+                        data = ref_obj()
+                        if isinstance(data, bytes) and len(data) > 0:
+                            with open(temp_path, 'wb') as f:
+                                f.write(data)
+                                f.flush()
+                            success = True
+                            logger.debug("Imagem salva usando ref (callable)")
+                except Exception as e:
+                    logger.debug(f"Erro ao salvar usando ref: {e}")
+            
+            # Método 3: Usando save direto
+            if hasattr(image, 'save') and callable(getattr(image, 'save')) and not success:
+                try:
+                    image.save(temp_path)
+                    success = True
+                    logger.debug("Imagem salva usando save direto")
+                except Exception as e:
+                    logger.debug(f"Erro ao salvar usando save direto: {e}")
+            
+            # Método 4: Último recurso - tentar obter dados de diferentes formas
+            if not success:
                 data = None
                 for attr in ['_data', 'ref', 'data', 'image']:
                     if hasattr(image, attr):
-                        potential_data = getattr(image, attr)
-                        if callable(potential_data):
-                            potential_data = potential_data()
-                        if isinstance(potential_data, bytes):
-                            data = potential_data
-                            break
+                        try:
+                            potential_data = getattr(image, attr)
+                            if callable(potential_data):
+                                potential_data = potential_data()
+                            if isinstance(potential_data, bytes) and len(potential_data) > 0:
+                                data = potential_data
+                                break
+                        except Exception as e:
+                            logger.debug(f"Erro ao obter {attr}: {e}")
+                            continue
                 
                 if data:
                     with open(temp_path, 'wb') as f:
                         f.write(data)
-                        f.flush()  # Força escrita no disco
-                        f.close()  # Fecha explicitamente o arquivo
-                else:
-                    raise AttributeError("Não foi possível obter dados da imagem")
+                        f.flush()
+                    success = True
+                    logger.debug("Imagem salva usando método de fallback")
+            
+            if not success:
+                raise AttributeError("Não foi possível obter dados da imagem")
             
             # Verifica se arquivo foi criado corretamente
             if not os.path.exists(temp_path):
                 raise FileNotFoundError(f"Arquivo temporário não foi criado: {temp_path}")
             
             # Verifica se arquivo tem conteúdo
-            if os.path.getsize(temp_path) == 0:
+            file_size = os.path.getsize(temp_path)
+            if file_size == 0:
                 raise ValueError(f"Arquivo temporário está vazio: {temp_path}")
             
-            logger.info(f"Imagem salva temporariamente: {temp_path} ({os.path.getsize(temp_path)} bytes)")
+            logger.info(f"Imagem salva temporariamente: {temp_path} ({file_size} bytes)")
             return temp_path
             
         except AttributeError as e:

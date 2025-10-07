@@ -102,3 +102,4 @@ python3 abrir_sistema.py
 
 **Agora você tem uma interface web moderna para fazer upload de planilhas Excel e processar imagens automaticamente via FTP!**
 
+
