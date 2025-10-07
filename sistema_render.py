@@ -50,6 +50,14 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
     
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+    
     def serve_frontend(self):
         """Serve o frontend HTML"""
         html_content = """
@@ -711,6 +719,13 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
     def handle_upload(self):
         """Processa uploads de arquivos Excel - versão Render"""
         try:
+            # Adiciona headers CORS para evitar problemas
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            
             if not FTP_AVAILABLE or not OPENPYXL_AVAILABLE:
                 error_response = {
                     'error': 'Dependências não disponíveis no ambiente de deploy',
@@ -719,8 +734,6 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
                     'uploads_successful': 0,
                     'uploads_failed': 1
                 }
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps(error_response).encode())
                 return
@@ -750,7 +763,15 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
                         break
             
             if not file_data or not filename:
-                self.send_error(400, 'Arquivo não encontrado')
+                error_response = {
+                    'error': 'Arquivo não encontrado',
+                    'total_refs': 0,
+                    'images_found': 0,
+                    'uploads_successful': 0,
+                    'uploads_failed': 1
+                }
+                self.end_headers()
+                self.wfile.write(json.dumps(error_response).encode())
                 return
             
             # Salva arquivo temporariamente
@@ -771,8 +792,6 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
                     'uploads_failed': stats['total_refs'],
                     'suggestion': 'Arquivos recomendados: tartaruga.xlsx ou carrinho.xlsx'
                 }
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps(error_response).encode())
                 os.remove(temp_path)
@@ -782,8 +801,6 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
             os.remove(temp_path)
             
             # Envia resposta
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(stats).encode())
             
@@ -797,6 +814,7 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
             }
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
     
@@ -875,7 +893,7 @@ class RenderUploadHandler(BaseHTTPRequestHandler):
 
 def start_render_server():
     """Inicia o servidor Render"""
-    port = int(os.getenv('PORT', 8080))
+    port = int(os.getenv('PORT', 8082))  # Porta diferente para evitar conflito
     
     print("🚀 Iniciando Sistema Render...")
     print("=" * 50)
