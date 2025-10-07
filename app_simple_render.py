@@ -39,7 +39,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def process_excel_simple(file_path):
-    """Processa arquivo Excel de forma simplificada"""
+    """Processa arquivo Excel de forma inteligente - detecta coluna REF dinamicamente"""
     try:
         logger.info(f"Carregando arquivo Excel: {file_path}")
         workbook = openpyxl.load_workbook(file_path)
@@ -73,32 +73,65 @@ def process_excel_simple(file_path):
         logger.info(f"📊 Mapa de imagens criado: {len(image_map)} imagens disponíveis")
         logger.info(f"📊 Posições das imagens: {sorted(image_map.keys())}")
         
-        # Coleta TODAS as REFs da coluna A (começando da linha 4)
+        # PASSO 1: Detectar a coluna REF nas linhas 2 ou 3
+        ref_column = None
+        ref_header_row = None
+        
+        logger.info("🔍 Procurando coluna REF nas linhas 2 e 3...")
+        
+        # Procura na linha 2 primeiro
+        for col in range(1, worksheet.max_column + 1):
+            cell_value = worksheet.cell(row=2, column=col).value
+            if cell_value and str(cell_value).strip().upper() in ['REF', 'REFERENCIA', 'REFERÊNCIA', 'CÓDIGO', 'CODIGO']:
+                ref_column = col
+                ref_header_row = 2
+                logger.info(f"✅ Coluna REF encontrada na linha 2, coluna {chr(64 + col)} ({col})")
+                break
+        
+        # Se não encontrou na linha 2, procura na linha 3
+        if ref_column is None:
+            for col in range(1, worksheet.max_column + 1):
+                cell_value = worksheet.cell(row=3, column=col).value
+                if cell_value and str(cell_value).strip().upper() in ['REF', 'REFERENCIA', 'REFERÊNCIA', 'CÓDIGO', 'CODIGO']:
+                    ref_column = col
+                    ref_header_row = 3
+                    logger.info(f"✅ Coluna REF encontrada na linha 3, coluna {chr(64 + col)} ({col})")
+                    break
+        
+        if ref_column is None:
+            logger.warning("⚠️ Coluna REF não encontrada nas linhas 2 ou 3. Usando coluna A como padrão.")
+            ref_column = 1
+            ref_header_row = 3
+        
+        # PASSO 2: Determinar onde começam os dados (linha após o cabeçalho REF)
+        data_start_row = ref_header_row + 1
+        logger.info(f"📊 Dados começam na linha {data_start_row}")
+        
+        # PASSO 3: Coletar todas as REFs da coluna detectada
         all_refs = []
         max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
         
-        logger.info(f"Coletando todas as REFs da coluna A (linhas 4-{max_rows})")
+        logger.info(f"🔍 Coletando REFs da coluna {chr(64 + ref_column)} (linhas {data_start_row}-{max_rows})")
         
-        # Procura REFs a partir da linha 4 (onde começam os dados reais)
-        for row_num in range(4, max_rows + 1):
-            ref_cell = worksheet[f'A{row_num}']
+        for row_num in range(data_start_row, max_rows + 1):
+            ref_cell = worksheet.cell(row=row_num, column=ref_column)
             if ref_cell.value and str(ref_cell.value).strip():
                 ref_value = str(ref_cell.value).strip()
-                # Verifica se é uma REF válida (começa com letras)
+                # Verifica se é uma REF válida (contém letras)
                 if ref_value and any(c.isalpha() for c in ref_value):
                     all_refs.append({
                         'row': row_num,
                         'ref': ref_value,
-                        'cell': f'A{row_num}'
+                        'cell': f"{chr(64 + ref_column)}{row_num}"
                     })
                     logger.info(f"REF encontrada: {ref_value} na linha {row_num}")
         
-        logger.info(f"Total de REFs encontradas: {len(all_refs)}")
+        logger.info(f"📊 Total de REFs encontradas: {len(all_refs)}")
         for ref_info in all_refs:
             logger.info(f"  REF {ref_info['ref']} na linha {ref_info['row']}")
         
-        # Processa cada REF encontrada
-        logger.info(f"Iniciando processamento de {len(all_refs)} REFs")
+        # PASSO 4: Processar cada REF e associar com imagem da mesma linha
+        logger.info(f"🚀 Iniciando processamento de {len(all_refs)} REFs")
         
         for i, ref_info in enumerate(all_refs):
             row_num = ref_info['row']
@@ -107,105 +140,50 @@ def process_excel_simple(file_path):
             results['total_refs'] += 1
             logger.info(f"[{i+1}/{len(all_refs)}] Processando linha {row_num}: REF = {ref_value}")
             
-            # Verifica se há imagem usando diferentes métodos
+            # Verifica se há imagem na mesma linha
             image_found = False
             image_source = ""
             
-            # Método 1: Verifica se há imagem embutida na coluna H da mesma linha
+            # Método 1: Verifica se há imagem embutida na mesma linha
             try:
-                # Procura por imagens na linha atual da coluna H
-                for img_row, img_col in image_map.items():
-                    if img_row == row_num and img_col == 8:  # Coluna H = 8
-                        image_found = True
-                        image_source = f"imagem embutida na célula H{row_num}"
-                        logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
-                        break
+                if row_num in image_map:
+                    img_col = image_map[row_num]
+                    image_found = True
+                    image_source = f"imagem embutida na linha {row_num}, coluna {chr(64 + img_col)}"
+                    logger.info(f"✅ Imagem encontrada na linha {row_num} ({image_source})")
             except Exception as e:
-                logger.warning(f"Erro ao verificar imagem embutida H{row_num}: {e}")
+                logger.warning(f"Erro ao verificar imagem embutida linha {row_num}: {e}")
             
-            # Método 1b: Verifica se a célula H tem valor (texto/URL)
+            # Método 2: Verifica células próximas à coluna REF (colunas adjacentes)
             if not image_found:
                 try:
-                    photo_cell = worksheet[f'H{row_num}']
-                    if photo_cell.value and str(photo_cell.value).strip():
-                        image_found = True
-                        image_source = f"valor da célula H{row_num}: {photo_cell.value}"
-                        logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                    # Procura em colunas próximas (H, I, J, etc.)
+                    for col_offset in range(1, 10):  # Verifica até 10 colunas à direita
+                        check_col = ref_column + col_offset
+                        if check_col <= worksheet.max_column:
+                            cell = worksheet.cell(row=row_num, column=check_col)
+                            if cell.value and str(cell.value).strip():
+                                image_found = True
+                                image_source = f"valor na célula {chr(64 + check_col)}{row_num}: {cell.value}"
+                                logger.info(f"✅ Imagem encontrada na linha {row_num} ({image_source})")
+                                break
                 except Exception as e:
-                    logger.warning(f"Erro ao acessar célula H{row_num}: {e}")
+                    logger.warning(f"Erro ao verificar células adjacentes linha {row_num}: {e}")
             
-            # Método 2: Verifica células adjacentes (G, I)
-            if not image_found:
-                try:
-                    for col_offset in [-1, 1]:  # Coluna G e I
-                        adj_cell = worksheet.cell(row=row_num, column=8 + col_offset)
-                        if adj_cell.value and str(adj_cell.value).strip():
-                            image_found = True
-                            image_source = f"célula adjacente {chr(65 + 7 + col_offset)}{row_num}: {adj_cell.value}"
-                            logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
-                            break
-                except Exception as e:
-                    logger.warning(f"Erro ao acessar células adjacentes da linha {row_num}: {e}")
-            
-            # Método 3: Associação direta por ordem (1 REF = 1 Imagem)
+            # Método 3: Associação sequencial (fallback)
             if not image_found and len(image_map) > 0:
                 try:
-                    # Associa imagens sequencialmente: REF 1 = Imagem 1, REF 2 = Imagem 2, etc.
                     image_list = sorted(image_map.keys())
-                    ref_index = results['total_refs'] - 1  # Índice atual da REF (0-based)
+                    ref_index = results['total_refs'] - 1
                     
                     if ref_index < len(image_list):
                         img_row = image_list[ref_index]
                         img_col = image_map[img_row]
                         image_found = True
                         image_source = f"imagem sequencial #{ref_index + 1} na linha {img_row}, coluna {chr(64 + img_col)}"
-                        logger.info(f"Imagem sequencial encontrada para linha {row_num} ({image_source})")
+                        logger.info(f"✅ Imagem sequencial encontrada para linha {row_num} ({image_source})")
                 except Exception as e:
-                    logger.warning(f"Erro ao processar associação sequencial para linha {row_num}: {e}")
-            
-            # Método 4: Verifica se há imagens inseridas próximas (tolerância ampla)
-            if not image_found and len(image_map) > 0:
-                try:
-                    # Procura por imagens próximas usando o mapa com tolerância ampla
-                    for img_row, img_col in image_map.items():
-                        if abs(img_row - row_num) <= 15:  # Tolerância ainda mais ampla
-                            image_found = True
-                            image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
-                            logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
-                            break
-                except Exception as e:
-                    logger.warning(f"Erro ao processar image_map para linha {row_num}: {e}")
-            
-            # Método 5: Associa qualquer imagem não utilizada
-            if not image_found and len(image_map) > 0:
-                try:
-                    # Pega qualquer imagem não utilizada
-                    used_images = set()
-                    for j in range(i):  # Imagens já usadas pelas REFs anteriores
-                        if j < len(sorted(image_map.keys())):
-                            used_images.add(sorted(image_map.keys())[j])
-                    
-                    unused_images = [img_row for img_row in image_map.keys() if img_row not in used_images]
-                    if unused_images:
-                        img_row = min(unused_images)
-                        img_col = image_map[img_row]
-                        image_found = True
-                        image_source = f"imagem não utilizada na linha {img_row}, coluna {chr(64 + img_col)}"
-                        logger.info(f"Imagem não utilizada encontrada para linha {row_num} ({image_source})")
-                except Exception as e:
-                    logger.warning(f"Erro ao processar imagens não utilizadas para linha {row_num}: {e}")
-            
-            # Método 6: Fallback - associa qualquer imagem disponível
-            if not image_found and len(image_map) > 0:
-                try:
-                    # Associa qualquer imagem disponível como último recurso
-                    img_row = min(image_map.keys())
-                    img_col = image_map[img_row]
-                    image_found = True
-                    image_source = f"imagem fallback na linha {img_row}, coluna {chr(64 + img_col)}"
-                    logger.info(f"Imagem fallback encontrada para linha {row_num} ({image_source})")
-                except Exception as e:
-                    logger.warning(f"Erro ao associar imagem fallback para linha {row_num}: {e}")
+                    logger.warning(f"Erro ao processar associação sequencial linha {row_num}: {e}")
             
             if image_found:
                 results['images_found'] += 1
