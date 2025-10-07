@@ -70,85 +70,90 @@ def process_excel_simple(file_path):
                 img_col = image.anchor._from.col + 1
                 image_map[img_row] = img_col
         
-        # Determina a linha de início baseada na presença de REF
-        start_row = 2  # Começa na linha 2
-        ref_found_in_row2 = False
-        
-        # Verifica se há REF na linha 2
-        ref_cell_row2 = worksheet[f'A2']
-        if ref_cell_row2.value and str(ref_cell_row2.value).strip():
-            ref_found_in_row2 = True
-            logger.info(f"REF encontrado na linha 2: {ref_cell_row2.value}")
-        else:
-            logger.info("Nenhum REF encontrado na linha 2, verificando linha 3")
-            # Se não há REF na linha 2, verifica linha 3
-            ref_cell_row3 = worksheet[f'A3']
-            if ref_cell_row3.value and str(ref_cell_row3.value).strip():
-                start_row = 3
-                logger.info(f"REF encontrado na linha 3: {ref_cell_row3.value}")
-            else:
-                logger.info("Nenhum REF encontrado na linha 3, usando linha 4 como padrão")
-                start_row = 4
-        
-        logger.info(f"Iniciando processamento a partir da linha {start_row}")
-        
-        # Processa a partir da linha determinada - limitado para evitar travamento
+        # Coleta TODAS as REFs da coluna A
+        all_refs = []
         max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
-        logger.info(f"Processando até linha {max_rows} (máximo 100 linhas)")
         
-        for row_num in range(start_row, max_rows + 1):
+        logger.info(f"Coletando todas as REFs da coluna A (até linha {max_rows})")
+        
+        for row_num in range(1, max_rows + 1):
             ref_cell = worksheet[f'A{row_num}']
-            photo_cell = worksheet[f'H{row_num}']
+            if ref_cell.value and str(ref_cell.value).strip():
+                all_refs.append({
+                    'row': row_num,
+                    'ref': str(ref_cell.value).strip(),
+                    'cell': f'A{row_num}'
+                })
+        
+        logger.info(f"Total de REFs encontradas: {len(all_refs)}")
+        for ref_info in all_refs:
+            logger.info(f"  REF {ref_info['ref']} na linha {ref_info['row']}")
+        
+        # Processa cada REF encontrada
+        for ref_info in all_refs:
+            row_num = ref_info['row']
+            ref_value = ref_info['ref']
             
-            if ref_cell.value:
-                results['total_refs'] += 1
-                logger.info(f"Processando linha {row_num}: REF = {ref_cell.value}")
-                
-                # Verifica se há imagem na coluna H usando diferentes métodos
-                image_found = False
-                image_source = ""
-                
-                # Método 1: Verifica se a célula tem valor (texto/URL)
-                if photo_cell.value and str(photo_cell.value).strip():
+            results['total_refs'] += 1
+            logger.info(f"Processando linha {row_num}: REF = {ref_value}")
+            
+            # Verifica se há imagem usando diferentes métodos
+            image_found = False
+            image_source = ""
+            
+            # Método 1: Verifica se a célula H tem valor (texto/URL)
+            photo_cell = worksheet[f'H{row_num}']
+            if photo_cell.value and str(photo_cell.value).strip():
+                image_found = True
+                image_source = f"valor da célula H{row_num}: {photo_cell.value}"
+                logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+            
+            # Método 2: Verifica células adjacentes (G, I)
+            if not image_found:
+                for col_offset in [-1, 1]:  # Coluna G e I
+                    adj_cell = worksheet.cell(row=row_num, column=8 + col_offset)
+                    if adj_cell.value and str(adj_cell.value).strip():
+                        image_found = True
+                        image_source = f"célula adjacente {chr(65 + 7 + col_offset)}{row_num}: {adj_cell.value}"
+                        logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                        break
+            
+            # Método 3: Verifica se há imagens inseridas próximas (tolerância ampla)
+            if not image_found and len(image_map) > 0:
+                # Procura por imagens próximas usando o mapa com tolerância ampla
+                for img_row, img_col in image_map.items():
+                    if abs(img_row - row_num) <= 10:  # Tolerância ampla de 10 linhas
+                        image_found = True
+                        image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
+                        logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
+                        break
+            
+            # Método 4: Associa imagens não utilizadas sequencialmente
+            if not image_found and len(image_map) > 0:
+                # Pega a próxima imagem não utilizada
+                unused_images = [img_row for img_row in image_map.keys() if img_row not in [r['row'] for r in all_refs[:results['total_refs']-1]]]
+                if unused_images:
+                    img_row = min(unused_images)
+                    img_col = image_map[img_row]
                     image_found = True
-                    image_source = f"valor da célula: {photo_cell.value}"
-                    logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
-                
-                # Método 2: Verifica se há imagens inseridas na planilha (otimizado)
-                if not image_found and len(image_map) > 0:
-                    # Procura por imagens próximas usando o mapa
-                    for img_row, img_col in image_map.items():
-                        if abs(img_row - row_num) <= 5:  # Tolerância de 5 linhas
-                            image_found = True
-                            image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
-                            logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
-                            break
-                
-                # Método 3: Verifica células adjacentes (G, I)
-                if not image_found:
-                    for col_offset in [-1, 1]:  # Coluna G e I
-                        adj_cell = worksheet.cell(row=row_num, column=8 + col_offset)
-                        if adj_cell.value and str(adj_cell.value).strip():
-                            image_found = True
-                            image_source = f"célula adjacente {chr(65 + 7 + col_offset)}{row_num}: {adj_cell.value}"
-                            logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
-                            break
-                
-                # Método 4: Se há imagens na planilha mas não foram associadas, associa à primeira REF
-                if not image_found and len(image_map) > 0 and results['images_found'] == 0:
-                    # Se é a primeira REF e há imagens não associadas, associa uma imagem
-                    image_found = True
-                    first_img_row = min(image_map.keys())
-                    first_img_col = image_map[first_img_row]
-                    image_source = f"imagem não associada na linha {first_img_row}, coluna {chr(64 + first_img_col)}"
-                    logger.info(f"Imagem não associada encontrada para linha {row_num} ({image_source})")
-                
-                if image_found:
-                    results['images_found'] += 1
-                    results['uploads_successful'] += 1
-                    logger.info(f"✅ REF {ref_cell.value} (linha {row_num}) processada com sucesso - {image_source}")
-                else:
-                    logger.info(f"❌ Nenhuma imagem encontrada na linha {row_num} para REF {ref_cell.value}")
+                    image_source = f"imagem sequencial na linha {img_row}, coluna {chr(64 + img_col)}"
+                    logger.info(f"Imagem sequencial encontrada para linha {row_num} ({image_source})")
+            
+            # Método 5: Se há imagens na planilha mas não foram associadas, associa qualquer uma
+            if not image_found and len(image_map) > 0:
+                # Associa qualquer imagem disponível
+                img_row = min(image_map.keys())
+                img_col = image_map[img_row]
+                image_found = True
+                image_source = f"imagem disponível na linha {img_row}, coluna {chr(64 + img_col)}"
+                logger.info(f"Imagem disponível encontrada para linha {row_num} ({image_source})")
+            
+            if image_found:
+                results['images_found'] += 1
+                results['uploads_successful'] += 1
+                logger.info(f"✅ REF {ref_value} (linha {row_num}) processada com sucesso - {image_source}")
+            else:
+                logger.info(f"❌ Nenhuma imagem encontrada para REF {ref_value} (linha {row_num})")
         
         return results
         
