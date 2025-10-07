@@ -19,6 +19,14 @@ except ImportError as e:
     logging.warning(f"FTP module not available: {e}")
     FTP_AVAILABLE = False
 
+# Fallback para processamento de imagens sem Pillow
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    logging.warning("PIL/Pillow not available, using basic image processing")
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -83,7 +91,8 @@ def get_config():
         'upload_path': 'images/products/',
         'max_file_size': '50MB',
         'allowed_extensions': list(ALLOWED_EXTENSIONS),
-        'ftp_available': FTP_AVAILABLE
+        'ftp_available': FTP_AVAILABLE,
+        'pil_available': PIL_AVAILABLE
     }), 200
 
 @app.route('/upload', methods=['POST'])
@@ -119,6 +128,14 @@ def upload_file():
         logger.info(f"Arquivo salvo temporariamente: {temp_path}")
         
         try:
+            # Verifica se PIL está disponível antes de processar
+            if not PIL_AVAILABLE:
+                return jsonify({
+                    'error': 'Processamento de imagens não disponível. PIL/Pillow não instalado.',
+                    'pil_available': False,
+                    'ftp_available': FTP_AVAILABLE
+                }), 503
+            
             # Processa arquivo com o sistema FTP
             extractor = FTPImageExtractorCorrigido(FTP_HOST, FTP_USER, FTP_PASSWORD)
             stats = extractor.process_excel_file(temp_path, start_row=4, photo_column='H')
@@ -131,7 +148,8 @@ def upload_file():
                 'uploads_successful': stats['uploads_successful'],
                 'uploads_failed': stats['uploads_failed'],
                 'errors': stats['errors'],
-                'images': []
+                'images': [],
+                'pil_available': PIL_AVAILABLE
             }
             
             # Adiciona informações das imagens processadas
@@ -190,6 +208,7 @@ if __name__ == '__main__':
     print(f"🌍 Ambiente: {'Produção' if not debug else 'Desenvolvimento'}")
     print(f"🔧 Porta: {port}")
     print(f"📡 FTP Disponível: {FTP_AVAILABLE}")
+    print(f"🖼️  PIL Disponível: {PIL_AVAILABLE}")
     print()
     
     # Cria diretório de uploads se não existir
