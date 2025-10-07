@@ -41,8 +41,10 @@ def allowed_file(filename):
 def process_excel_simple(file_path):
     """Processa arquivo Excel de forma simplificada"""
     try:
+        logger.info(f"Carregando arquivo Excel: {file_path}")
         workbook = openpyxl.load_workbook(file_path)
         worksheet = workbook.active
+        logger.info(f"Planilha carregada: {worksheet.title}")
         
         results = {
             'total_refs': 0,
@@ -201,30 +203,64 @@ def get_config():
 def upload_file():
     """Processa upload de arquivo Excel"""
     try:
+        logger.info("Iniciando processamento de upload")
+        
         # Verifica se há arquivo na requisição
         if 'excel_file' not in request.files:
+            logger.warning("Nenhum arquivo enviado na requisição")
             return jsonify({'error': 'Nenhum arquivo enviado'}), 400
         
         file = request.files['excel_file']
         
         # Verifica se arquivo foi selecionado
         if file.filename == '':
+            logger.warning("Arquivo vazio enviado")
             return jsonify({'error': 'Nenhum arquivo selecionado'}), 400
         
         # Verifica se arquivo é permitido
         if not allowed_file(file.filename):
+            logger.warning(f"Tipo de arquivo não permitido: {file.filename}")
             return jsonify({'error': 'Apenas arquivos .xlsx são permitidos'}), 400
+        
+        logger.info(f"Processando arquivo: {file.filename}")
         
         # Salva arquivo temporariamente
         filename = secure_filename(file.filename)
         temp_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(temp_path)
         
-        logger.info(f"Arquivo salvo temporariamente: {temp_path}")
+        try:
+            file.save(temp_path)
+            logger.info(f"Arquivo salvo temporariamente: {temp_path}")
+        except Exception as e:
+            logger.error(f"Erro ao salvar arquivo: {e}")
+            return jsonify({'error': f'Erro ao salvar arquivo: {str(e)}'}), 500
         
         try:
             # Processa arquivo Excel de forma simplificada
-            stats = process_excel_simple(temp_path)
+            logger.info("Iniciando processamento do Excel")
+            
+            # Adiciona timeout para evitar travamento
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Processamento demorou muito")
+            
+            # Define timeout de 30 segundos
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(30)
+            
+            try:
+                stats = process_excel_simple(temp_path)
+                signal.alarm(0)  # Cancela o alarme
+                logger.info(f"Processamento concluído: {stats}")
+            except TimeoutError:
+                signal.alarm(0)  # Cancela o alarme
+                logger.error("Timeout no processamento do Excel")
+                return jsonify({
+                    'error': 'Processamento demorou muito - arquivo pode estar corrompido',
+                    'success': False,
+                    'version': 'simplified'
+                }), 408
             
             # Prepara resposta com resultados
             response_data = {
@@ -253,19 +289,28 @@ def upload_file():
             
         except Exception as e:
             logger.error(f"Erro no processamento: {e}")
-            return jsonify({'error': f'Erro no processamento: {str(e)}'}), 500
+            return jsonify({
+                'error': f'Erro no processamento: {str(e)}',
+                'success': False,
+                'version': 'simplified'
+            }), 500
             
         finally:
             # Remove arquivo temporário
             try:
-                os.remove(temp_path)
-                logger.info(f"Arquivo temporário removido: {temp_path}")
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    logger.info(f"Arquivo temporário removido: {temp_path}")
             except Exception as e:
                 logger.warning(f"Erro ao remover arquivo temporário: {e}")
     
     except Exception as e:
         logger.error(f"Erro geral no upload: {e}")
-        return jsonify({'error': f'Erro interno do servidor: {str(e)}'}), 500
+        return jsonify({
+            'error': f'Erro interno do servidor: {str(e)}',
+            'success': False,
+            'version': 'simplified'
+        }), 500
 
 @app.errorhandler(413)
 def too_large(e):
