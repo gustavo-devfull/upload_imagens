@@ -70,6 +70,9 @@ def process_excel_simple(file_path):
                 img_col = image.anchor._from.col + 1
                 image_map[img_row] = img_col
         
+        logger.info(f"📊 Mapa de imagens criado: {len(image_map)} imagens disponíveis")
+        logger.info(f"📊 Posições das imagens: {sorted(image_map.keys())}")
+        
         # Coleta TODAS as REFs da coluna A
         all_refs = []
         max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
@@ -126,12 +129,28 @@ def process_excel_simple(file_path):
                 except Exception as e:
                     logger.warning(f"Erro ao acessar células adjacentes da linha {row_num}: {e}")
             
-            # Método 3: Verifica se há imagens inseridas próximas (tolerância ampla)
+            # Método 3: Associação direta por ordem (1 REF = 1 Imagem)
+            if not image_found and len(image_map) > 0:
+                try:
+                    # Associa imagens sequencialmente: REF 1 = Imagem 1, REF 2 = Imagem 2, etc.
+                    image_list = sorted(image_map.keys())
+                    ref_index = results['total_refs'] - 1  # Índice atual da REF (0-based)
+                    
+                    if ref_index < len(image_list):
+                        img_row = image_list[ref_index]
+                        img_col = image_map[img_row]
+                        image_found = True
+                        image_source = f"imagem sequencial #{ref_index + 1} na linha {img_row}, coluna {chr(64 + img_col)}"
+                        logger.info(f"Imagem sequencial encontrada para linha {row_num} ({image_source})")
+                except Exception as e:
+                    logger.warning(f"Erro ao processar associação sequencial para linha {row_num}: {e}")
+            
+            # Método 4: Verifica se há imagens inseridas próximas (tolerância ampla)
             if not image_found and len(image_map) > 0:
                 try:
                     # Procura por imagens próximas usando o mapa com tolerância ampla
                     for img_row, img_col in image_map.items():
-                        if abs(img_row - row_num) <= 10:  # Tolerância ampla de 10 linhas
+                        if abs(img_row - row_num) <= 15:  # Tolerância ainda mais ampla
                             image_found = True
                             image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
                             logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
@@ -139,31 +158,36 @@ def process_excel_simple(file_path):
                 except Exception as e:
                     logger.warning(f"Erro ao processar image_map para linha {row_num}: {e}")
             
-            # Método 4: Associa imagens não utilizadas sequencialmente
+            # Método 5: Associa qualquer imagem não utilizada
             if not image_found and len(image_map) > 0:
                 try:
-                    # Pega a próxima imagem não utilizada
-                    unused_images = [img_row for img_row in image_map.keys() if img_row not in [r['row'] for r in all_refs[:results['total_refs']-1]]]
+                    # Pega qualquer imagem não utilizada
+                    used_images = set()
+                    for j in range(i):  # Imagens já usadas pelas REFs anteriores
+                        if j < len(sorted(image_map.keys())):
+                            used_images.add(sorted(image_map.keys())[j])
+                    
+                    unused_images = [img_row for img_row in image_map.keys() if img_row not in used_images]
                     if unused_images:
                         img_row = min(unused_images)
                         img_col = image_map[img_row]
                         image_found = True
-                        image_source = f"imagem sequencial na linha {img_row}, coluna {chr(64 + img_col)}"
-                        logger.info(f"Imagem sequencial encontrada para linha {row_num} ({image_source})")
+                        image_source = f"imagem não utilizada na linha {img_row}, coluna {chr(64 + img_col)}"
+                        logger.info(f"Imagem não utilizada encontrada para linha {row_num} ({image_source})")
                 except Exception as e:
-                    logger.warning(f"Erro ao processar imagens sequenciais para linha {row_num}: {e}")
+                    logger.warning(f"Erro ao processar imagens não utilizadas para linha {row_num}: {e}")
             
-            # Método 5: Se há imagens na planilha mas não foram associadas, associa qualquer uma
+            # Método 6: Fallback - associa qualquer imagem disponível
             if not image_found and len(image_map) > 0:
                 try:
-                    # Associa qualquer imagem disponível
+                    # Associa qualquer imagem disponível como último recurso
                     img_row = min(image_map.keys())
                     img_col = image_map[img_row]
                     image_found = True
-                    image_source = f"imagem disponível na linha {img_row}, coluna {chr(64 + img_col)}"
-                    logger.info(f"Imagem disponível encontrada para linha {row_num} ({image_source})")
+                    image_source = f"imagem fallback na linha {img_row}, coluna {chr(64 + img_col)}"
+                    logger.info(f"Imagem fallback encontrada para linha {row_num} ({image_source})")
                 except Exception as e:
-                    logger.warning(f"Erro ao associar imagem disponível para linha {row_num}: {e}")
+                    logger.warning(f"Erro ao associar imagem fallback para linha {row_num}: {e}")
             
             if image_found:
                 results['images_found'] += 1
