@@ -5,7 +5,7 @@
 buildCommand: pip install -r requirements.txt
 
 # Comando de start
-startCommand: python app.py
+startCommand: python app_complete.py
 
 # Variáveis de ambiente necessárias
 # Configure estas no painel do Render:
