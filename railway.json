@@ -1,0 +1,16 @@
+# Railway Deploy Configuration
+# Este arquivo configura o deploy automático no Railway
+
+# Comando para iniciar a aplicação
+[build]
+command = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "gunicorn server:app --bind 0.0.0.0:$PORT"
+
+# Variáveis de ambiente necessárias
+# Configure estas no painel do Railway:
+# FTP_HOST=46.202.90.62
+# FTP_USER=u715606397.ideolog.ia.br
+# FTP_PASSWORD=]X9CC>t~ihWhdzNq
+# FLASK_ENV=production

@@ -1,0 +1,15 @@
+# Render Deploy Configuration
+# Este arquivo configura o deploy automático no Render
+
+# Comando de build
+buildCommand: pip install -r requirements.txt
+
+# Comando de start
+startCommand: gunicorn server:app --bind 0.0.0.0:$PORT
+
+# Variáveis de ambiente necessárias
+# Configure estas no painel do Render:
+# FTP_HOST=46.202.90.62
+# FTP_USER=u715606397.ideolog.ia.br
+# FTP_PASSWORD=]X9CC>t~ihWhdzNq
+# FLASK_ENV=production
