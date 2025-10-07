@@ -58,7 +58,15 @@ def process_excel_simple(file_path):
             if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
                 img_row = image.anchor._from.row + 1
                 img_col = image.anchor._from.col + 1
-                logger.info(f"Imagem {i+1}: linha {img_row}, coluna {img_col}")
+                logger.info(f"Imagem {i+1}: linha {img_row}, coluna {chr(64 + img_col)}")
+        
+        # Cria mapa de imagens para associação com REFs
+        image_map = {}
+        for image in worksheet._images:
+            if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
+                img_row = image.anchor._from.row + 1
+                img_col = image.anchor._from.col + 1
+                image_map[img_row] = img_col
         
         # Processa a partir da linha 4 (índice 3)
         for row_num in range(4, worksheet.max_row + 1):
@@ -89,7 +97,8 @@ def process_excel_simple(file_path):
                             img_col = image.anchor._from.col + 1
                             
                             # Se a imagem está na coluna H (8) e próxima da linha atual
-                            if img_col == 8 and abs(img_row - row_num) <= 2:
+                            # Aumenta a tolerância para detectar imagens próximas
+                            if img_col == 8 and abs(img_row - row_num) <= 5:
                                 image_found = True
                                 image_source = f"imagem inserida na linha {img_row}"
                                 logger.info(f"Imagem inserida encontrada na linha {row_num} ({image_source})")
@@ -104,6 +113,25 @@ def process_excel_simple(file_path):
                             image_source = f"célula adjacente {chr(65 + 7 + col_offset)}{row_num}: {adj_cell.value}"
                             logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
                             break
+                
+                # Método 4: Verifica se há imagens em qualquer coluna próxima à linha atual
+                if not image_found:
+                    for img_row, img_col in image_map.items():
+                        # Se a imagem está próxima da linha atual (dentro de 3 linhas)
+                        if abs(img_row - row_num) <= 3:
+                            image_found = True
+                            image_source = f"imagem próxima na linha {img_row}, coluna {chr(64 + img_col)}"
+                            logger.info(f"Imagem próxima encontrada na linha {row_num} ({image_source})")
+                            break
+                
+                # Método 5: Se há imagens na planilha mas não foram associadas, associa à primeira REF
+                if not image_found and len(image_map) > 0 and results['images_found'] == 0:
+                    # Se é a primeira REF e há imagens não associadas, associa uma imagem
+                    image_found = True
+                    first_img_row = min(image_map.keys())
+                    first_img_col = image_map[first_img_row]
+                    image_source = f"imagem não associada na linha {first_img_row}, coluna {chr(64 + first_img_col)}"
+                    logger.info(f"Imagem não associada encontrada para linha {row_num} ({image_source})")
                 
                 if image_found:
                     results['images_found'] += 1
