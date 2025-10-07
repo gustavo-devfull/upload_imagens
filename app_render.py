@@ -183,10 +183,10 @@ if __name__ == '__main__':
     debug = os.getenv('FLASK_ENV') != 'production'
     
     print("🚀 Iniciando Sistema de Upload de Imagens Excel...")
-    print(f"📁 Frontend: http://localhost:{port}")
-    print(f"🔧 API: http://localhost:{port}/upload")
-    print(f"💚 Health Check: http://localhost:{port}/health")
-    print(f"⚙️  Config: http://localhost:{port}/config")
+    print(f"📁 Frontend: http://0.0.0.0:{port}")
+    print(f"🔧 API: http://0.0.0.0:{port}/upload")
+    print(f"💚 Health Check: http://0.0.0.0:{port}/health")
+    print(f"⚙️  Config: http://0.0.0.0:{port}/config")
     print(f"🌍 Ambiente: {'Produção' if not debug else 'Desenvolvimento'}")
     print(f"🔧 Porta: {port}")
     print(f"📡 FTP Disponível: {FTP_AVAILABLE}")
