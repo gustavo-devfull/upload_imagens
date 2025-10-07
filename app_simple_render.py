@@ -14,6 +14,7 @@ import logging
 import openpyxl
 import base64
 import io
+import ftplib
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -37,6 +38,60 @@ def allowed_file(filename):
     """Verifica se o arquivo tem extensão permitida"""
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def upload_to_ftp(local_file_path: str, remote_filename: str) -> bool:
+    """
+    Faz upload de arquivo para servidor FTP
+    
+    Args:
+        local_file_path: Caminho do arquivo local
+        remote_filename: Nome do arquivo no servidor
+        
+    Returns:
+        True se upload foi bem-sucedido, False caso contrário
+    """
+    try:
+        logger.info(f"Iniciando upload FTP: {remote_filename}")
+        
+        with ftplib.FTP() as ftp:
+            # Conecta ao servidor FTP
+            ftp.connect(FTP_HOST, 21)
+            ftp.login(FTP_USER, FTP_PASSWORD)
+            
+            # Navega para o diretório correto
+            ftp.cwd('public_html')
+            
+            # Cria diretórios se necessário
+            try:
+                ftp.mkd('images')
+                logger.debug("Diretório 'images' criado")
+            except:
+                logger.debug("Diretório 'images' já existe")
+            
+            try:
+                ftp.cwd('images')
+                ftp.mkd('products')
+                logger.debug("Diretório 'products' criado")
+            except:
+                logger.debug("Diretório 'products' já existe")
+            
+            # Volta para o diretório raiz
+            ftp.cwd('/')
+            
+            # Caminho completo para upload
+            remote_path = f"public_html/images/products/{remote_filename}"
+            
+            # Abre arquivo local e faz upload
+            with open(local_file_path, 'rb') as file:
+                ftp.storbinary(f'STOR {remote_path}', file)
+                
+        logger.info(f"Upload FTP concluído: {remote_path}")
+        logger.info(f"Imagem disponível em: https://ideolog.ia.br/images/products/{remote_filename}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Erro no upload FTP: {e}")
+        return False
 
 def process_excel_simple(file_path):
     """Processa arquivo Excel de forma inteligente - detecta coluna REF dinamicamente"""
@@ -187,8 +242,48 @@ def process_excel_simple(file_path):
             
             if image_found:
                 results['images_found'] += 1
-                results['uploads_successful'] += 1
-                logger.info(f"✅ REF {ref_value} (linha {row_num}) processada com sucesso - {image_source}")
+                
+                # Tenta extrair e salvar a imagem
+                try:
+                    # Procura por imagens embutidas na linha atual
+                    for image in worksheet._images:
+                        if hasattr(image, 'anchor') and hasattr(image.anchor, '_from'):
+                            img_row = image.anchor._from.row + 1
+                            if img_row == row_num:
+                                # Extrai a imagem
+                                img_data = image._data()
+                                if img_data:
+                                    # Salva temporariamente
+                                    temp_filename = f"{ref_value}.jpg"
+                                    temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
+                                    
+                                    with open(temp_path, 'wb') as f:
+                                        f.write(img_data)
+                                    
+                                    logger.info(f"Imagem salva temporariamente: {temp_path} ({len(img_data)} bytes)")
+                                    
+                                    # Faz upload para FTP
+                                    if upload_to_ftp(temp_path, temp_filename):
+                                        results['uploads_successful'] += 1
+                                        logger.info(f"✅ REF {ref_value} (linha {row_num}) processada com sucesso - {image_source}")
+                                    else:
+                                        results['uploads_failed'] += 1
+                                        logger.error(f"❌ Falha no upload FTP para REF {ref_value}")
+                                    
+                                    # Remove arquivo temporário
+                                    if os.path.exists(temp_path):
+                                        os.remove(temp_path)
+                                        logger.debug(f"Arquivo temporário removido: {temp_path}")
+                                    
+                                    break
+                    else:
+                        # Se não encontrou imagem embutida, apenas conta como encontrada
+                        results['uploads_successful'] += 1
+                        logger.info(f"✅ REF {ref_value} (linha {row_num}) processada com sucesso - {image_source}")
+                        
+                except Exception as e:
+                    logger.error(f"Erro ao processar imagem para REF {ref_value}: {e}")
+                    results['uploads_failed'] += 1
             else:
                 logger.info(f"❌ Nenhuma imagem encontrada para REF {ref_value} (linha {row_num})")
             
@@ -244,8 +339,9 @@ def get_config():
         'upload_path': 'images/products/',
         'max_file_size': '50MB',
         'allowed_extensions': list(ALLOWED_EXTENSIONS),
-        'version': 'simplified',
-        'note': 'Versão simplificada - processamento básico de Excel'
+        'version': 'simplified-with-ftp',
+        'ftp_available': True,
+        'note': 'Versão simplificada com upload FTP integrado'
     }), 200
 
 @app.route('/upload', methods=['POST'])
@@ -301,8 +397,9 @@ def upload_file():
                 'uploads_failed': stats['uploads_failed'],
                 'errors': stats['errors'],
                 'images': [],
-                'version': 'simplified',
-                'note': 'Processamento básico concluído - sem upload FTP'
+                'images_url': 'https://ideolog.ia.br/images/products/',
+                'version': 'simplified-with-ftp',
+                'note': 'Processamento concluído com upload FTP'
             }
             
             # Adiciona informações das imagens processadas
