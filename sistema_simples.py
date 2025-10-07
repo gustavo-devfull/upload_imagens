@@ -469,7 +469,11 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             `;
 
             if (data.error) {
-                html += `<div class="warning-box"><h3>⚠️ Erro</h3><p>${data.error}</p></div>`;
+                html += `<div class="warning-box"><h3>⚠️ Arquivo sem imagens</h3><p>${data.error}</p>`;
+                if (data.suggestion) {
+                    html += `<p><strong>💡 Sugestão:</strong> ${data.suggestion}</p>`;
+                }
+                html += `</div>`;
             }
 
             contentDiv.innerHTML = html;
@@ -590,6 +594,23 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             
             # Processamento simplificado (sem PIL)
             stats = self.process_excel_simple(temp_path)
+            
+            # Verifica se o arquivo tem imagens
+            if stats['images_found'] == 0:
+                error_response = {
+                    'error': f'Arquivo {filename} não contém imagens na coluna H. Use um arquivo que tenha imagens inseridas.',
+                    'total_refs': stats['total_refs'],
+                    'images_found': stats['images_found'],
+                    'uploads_successful': 0,
+                    'uploads_failed': stats['total_refs'],
+                    'suggestion': 'Arquivos recomendados: tartaruga.xlsx ou carrinho.xlsx'
+                }
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(error_response).encode())
+                os.remove(temp_path)
+                return
             
             # Remove arquivo temporário
             os.remove(temp_path)
