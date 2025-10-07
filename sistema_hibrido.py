@@ -174,28 +174,138 @@ class HybridUploadHandler(BaseHTTPRequestHandler):
         .progress-container {
             display: none;
             margin: 30px 0;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
         }
 
         .progress-bar {
             width: 100%;
-            height: 20px;
+            height: 25px;
             background: #e9ecef;
-            border-radius: 10px;
+            border-radius: 15px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #28a745 0%, #20c997 50%, #17a2b8 100%);
             width: 0%;
-            transition: width 0.3s ease;
+            transition: width 0.5s ease;
+            position: relative;
+            border-radius: 15px;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
 
         .progress-text {
             text-align: center;
-            color: #666;
+            color: #495057;
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .progress-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-step-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 0.7rem;
+        }
+
+        .progress-step.active .progress-step-icon {
+            background: #28a745;
+            color: white;
+        }
+
+        .progress-step.completed .progress-step-icon {
+            background: #28a745;
+            color: white;
+        }
+
+        .progress-steps {
+            margin: 15px 0;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
             font-size: 0.9rem;
+            color: #6c757d;
+            transition: color 0.3s ease;
+        }
+
+        .progress-step.active {
+            color: #28a745;
+            font-weight: 500;
+        }
+
+        .progress-step.completed {
+            color: #28a745;
+        }
+
+        .progress-step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+
+        .progress-step.active .progress-step-icon {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+            transform: scale(1.1);
+        }
+
+        .progress-step.completed .progress-step-icon {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
         }
 
         .results {
@@ -344,10 +454,36 @@ class HybridUploadHandler(BaseHTTPRequestHandler):
             </div>
 
             <div id="progressContainer" class="progress-container">
+                <div id="progressText" class="progress-text">Preparando upload...</div>
                 <div class="progress-bar">
                     <div id="progressFill" class="progress-fill"></div>
                 </div>
-                <div id="progressText" class="progress-text"></div>
+                <div id="progressSteps" class="progress-steps">
+                    <div class="progress-step" id="step1">
+                        <div class="progress-step-icon">1</div>
+                        <span>Enviando arquivo</span>
+                    </div>
+                    <div class="progress-step" id="step2">
+                        <div class="progress-step-icon">2</div>
+                        <span>Analisando planilha</span>
+                    </div>
+                    <div class="progress-step" id="step3">
+                        <div class="progress-step-icon">3</div>
+                        <span>Extraindo imagens</span>
+                    </div>
+                    <div class="progress-step" id="step4">
+                        <div class="progress-step-icon">4</div>
+                        <span>Upload FTP</span>
+                    </div>
+                    <div class="progress-step" id="step5">
+                        <div class="progress-step-icon">5</div>
+                        <span>Finalizando</span>
+                    </div>
+                </div>
+                <div id="progressDetails" class="progress-details">
+                    <span id="progressStatus">Aguardando...</span>
+                    <span id="progressTime">00:00</span>
+                </div>
             </div>
 
             <div id="results" class="results">
@@ -387,22 +523,56 @@ class HybridUploadHandler(BaseHTTPRequestHandler):
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('resetBtn').disabled = true;
 
-            // Simula progresso
+            // Barra de progresso avançada
             let progress = 0;
+            let currentStep = 0;
+            let startTime = Date.now();
+            
+            const steps = [
+                { text: 'Enviando arquivo...', progress: 20, stepId: 'step1' },
+                { text: 'Analisando planilha...', progress: 40, stepId: 'step2' },
+                { text: 'Extraindo imagens...', progress: 60, stepId: 'step3' },
+                { text: 'Fazendo upload FTP...', progress: 80, stepId: 'step4' },
+                { text: 'Finalizando...', progress: 100, stepId: 'step5' }
+            ];
+            
+            // Cronômetro
+            const timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('progressTime').textContent = `${minutes}:${seconds}`;
+            }, 1000);
+            
+            // Progresso dos passos
             const progressInterval = setInterval(() => {
-                progress += 10;
-                document.getElementById('progressFill').style.width = progress + '%';
-                
-                if (progress < 30) {
-                    document.getElementById('progressText').textContent = 'Enviando arquivo...';
-                } else if (progress < 60) {
-                    document.getElementById('progressText').textContent = 'Processando imagens...';
-                } else if (progress < 90) {
-                    document.getElementById('progressText').textContent = 'Fazendo upload FTP...';
+                if (currentStep < steps.length) {
+                    const step = steps[currentStep];
+                    
+                    // Atualiza barra de progresso
+                    progress = step.progress;
+                    document.getElementById('progressFill').style.width = progress + '%';
+                    document.getElementById('progressText').textContent = step.text;
+                    
+                    // Atualiza passo atual
+                    const stepElement = document.getElementById(step.stepId);
+                    stepElement.classList.add('active');
+                    
+                    // Marca passos anteriores como completos
+                    for (let i = 0; i < currentStep; i++) {
+                        const prevStep = document.getElementById(steps[i].stepId);
+                        prevStep.classList.remove('active');
+                        prevStep.classList.add('completed');
+                    }
+                    
+                    // Atualiza status
+                    document.getElementById('progressStatus').textContent = step.text;
+                    
+                    currentStep++;
                 } else {
-                    document.getElementById('progressText').textContent = 'Finalizando...';
+                    clearInterval(progressInterval);
                 }
-            }, 200);
+            }, 400);
 
             fetch('/upload', {
                 method: 'POST',
@@ -411,15 +581,39 @@ class HybridUploadHandler(BaseHTTPRequestHandler):
             .then(response => response.json())
             .then(data => {
                 clearInterval(progressInterval);
+                clearInterval(timerInterval);
+                
+                // Marca todos os passos como completos
+                steps.forEach(step => {
+                    const stepElement = document.getElementById(step.stepId);
+                    stepElement.classList.remove('active');
+                    stepElement.classList.add('completed');
+                });
+                
+                // Atualiza progresso final com informações detalhadas
                 document.getElementById('progressFill').style.width = '100%';
-                document.getElementById('progressText').textContent = 'Upload concluído!';
+                if (data.uploads_successful > 0) {
+                    document.getElementById('progressText').textContent = `✅ Upload concluído! ${data.uploads_successful} imagem(ns) enviada(s)`;
+                    document.getElementById('progressStatus').textContent = `✅ ${data.uploads_successful} imagem(ns) enviada(s) com sucesso`;
+                } else if (data.error) {
+                    document.getElementById('progressText').textContent = `❌ ${data.error}`;
+                    document.getElementById('progressStatus').textContent = `❌ Erro: ${data.error}`;
+                } else {
+                    document.getElementById('progressText').textContent = '⚠️ Nenhuma imagem foi enviada';
+                    document.getElementById('progressStatus').textContent = '⚠️ Nenhuma imagem foi enviada';
+                }
                 
                 setTimeout(() => {
                     showResults(data);
-                }, 500);
+                }, 1500);
             })
             .catch(error => {
                 clearInterval(progressInterval);
+                clearInterval(timerInterval);
+                
+                document.getElementById('progressText').textContent = `❌ Erro no upload: ${error.message}`;
+                document.getElementById('progressStatus').textContent = `❌ Erro: ${error.message}`;
+                
                 alert('Erro no upload: ' + error.message);
                 document.getElementById('uploadBtn').disabled = false;
                 document.getElementById('resetBtn').disabled = false;
