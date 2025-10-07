@@ -2,10 +2,9 @@ services:
   - type: web
     name: sistema-upload-excel
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python sistema_deploy.py
+    pythonVersion: 3.11.9
+    buildCommand: pip install --upgrade pip && pip install -r requirements_simples.txt
+    startCommand: python sistema_simples.py
     envVars:
       - key: PORT
         value: 8080
-      - key: PYTHON_VERSION
-        value: 3.11.0

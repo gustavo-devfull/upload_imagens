@@ -1,1 +1,1 @@
-web: python sistema_deploy.py
+web: python sistema_simples.py
