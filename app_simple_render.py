@@ -73,20 +73,25 @@ def process_excel_simple(file_path):
         logger.info(f"📊 Mapa de imagens criado: {len(image_map)} imagens disponíveis")
         logger.info(f"📊 Posições das imagens: {sorted(image_map.keys())}")
         
-        # Coleta TODAS as REFs da coluna A
+        # Coleta TODAS as REFs da coluna A (começando da linha 4)
         all_refs = []
         max_rows = min(worksheet.max_row, 100)  # Limita a 100 linhas para evitar travamento
         
-        logger.info(f"Coletando todas as REFs da coluna A (até linha {max_rows})")
+        logger.info(f"Coletando todas as REFs da coluna A (linhas 4-{max_rows})")
         
-        for row_num in range(1, max_rows + 1):
+        # Procura REFs a partir da linha 4 (onde começam os dados reais)
+        for row_num in range(4, max_rows + 1):
             ref_cell = worksheet[f'A{row_num}']
             if ref_cell.value and str(ref_cell.value).strip():
-                all_refs.append({
-                    'row': row_num,
-                    'ref': str(ref_cell.value).strip(),
-                    'cell': f'A{row_num}'
-                })
+                ref_value = str(ref_cell.value).strip()
+                # Verifica se é uma REF válida (começa com letras)
+                if ref_value and any(c.isalpha() for c in ref_value):
+                    all_refs.append({
+                        'row': row_num,
+                        'ref': ref_value,
+                        'cell': f'A{row_num}'
+                    })
+                    logger.info(f"REF encontrada: {ref_value} na linha {row_num}")
         
         logger.info(f"Total de REFs encontradas: {len(all_refs)}")
         for ref_info in all_refs:
@@ -106,15 +111,28 @@ def process_excel_simple(file_path):
             image_found = False
             image_source = ""
             
-            # Método 1: Verifica se a célula H tem valor (texto/URL)
+            # Método 1: Verifica se há imagem embutida na coluna H da mesma linha
             try:
-                photo_cell = worksheet[f'H{row_num}']
-                if photo_cell.value and str(photo_cell.value).strip():
-                    image_found = True
-                    image_source = f"valor da célula H{row_num}: {photo_cell.value}"
-                    logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                # Procura por imagens na linha atual da coluna H
+                for img_row, img_col in image_map.items():
+                    if img_row == row_num and img_col == 8:  # Coluna H = 8
+                        image_found = True
+                        image_source = f"imagem embutida na célula H{row_num}"
+                        logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                        break
             except Exception as e:
-                logger.warning(f"Erro ao acessar célula H{row_num}: {e}")
+                logger.warning(f"Erro ao verificar imagem embutida H{row_num}: {e}")
+            
+            # Método 1b: Verifica se a célula H tem valor (texto/URL)
+            if not image_found:
+                try:
+                    photo_cell = worksheet[f'H{row_num}']
+                    if photo_cell.value and str(photo_cell.value).strip():
+                        image_found = True
+                        image_source = f"valor da célula H{row_num}: {photo_cell.value}"
+                        logger.info(f"Imagem encontrada na linha {row_num} ({image_source})")
+                except Exception as e:
+                    logger.warning(f"Erro ao acessar célula H{row_num}: {e}")
             
             # Método 2: Verifica células adjacentes (G, I)
             if not image_found:
