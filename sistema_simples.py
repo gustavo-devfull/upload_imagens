@@ -978,17 +978,36 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             total_images = len(images)
             for i, image_data in enumerate(images):
                 try:
-                    # Salva bytes da imagem temporariamente
+                    # Converte e salva imagem como JPEG válido
                     safe_ref = "".join(c for c in image_data['ref'] if c.isalnum() or c in ('-', '_')).rstrip()
                     if not safe_ref:
                         safe_ref = f"image_{int(time.time())}"
                     
                     temp_image_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
-                    with open(temp_image_path, 'wb') as f:
-                        f.write(image_data['bytes'])
                     
-                    # Debug: verifica se os bytes são válidos
-                    print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes")
+                    # Converte bytes para imagem válida usando PIL
+                    try:
+                        from PIL import Image
+                        import io
+                        
+                        # Abre a imagem dos bytes
+                        image_stream = io.BytesIO(image_data['bytes'])
+                        img = Image.open(image_stream)
+                        
+                        # Converte para RGB se necessário
+                        if img.mode in ('RGBA', 'LA', 'P'):
+                            img = img.convert('RGB')
+                        
+                        # Salva como JPEG válido
+                        img.save(temp_image_path, 'JPEG', quality=95, optimize=True)
+                        
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes → JPEG válido")
+                        
+                    except Exception as e:
+                        # Fallback: salva bytes originais
+                        with open(temp_image_path, 'wb') as f:
+                            f.write(image_data['bytes'])
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback)")
                     
                     # Upload via FTP com timeout individual
                     with open(temp_image_path, 'rb') as file:
