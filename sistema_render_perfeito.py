@@ -573,18 +573,17 @@ def save_image_to_temp(image, ref_value, debug_info):
 app = create_app()
 
 # O Render funciona perfeitamente assim!
-# O gunicorn roda na porta 10000 internamente
-# O Render faz proxy para a porta 8080 externamente
+# O gunicorn roda na porta definida pela variável PORT
 # Isso é normal e esperado!
 
 if __name__ == "__main__":
+    port = int(os.getenv('PORT', 8080))
+    
     logger.info("🚀 Sistema Render Perfeito!")
     print("🚀 Sistema Render Perfeito!")
-    print("✅ Gunicorn funcionando na porta 10000")
-    print("✅ Render fazendo proxy para porta 8080")
-    print("✅ Sistema funcionando perfeitamente!")
+    print(f"✅ Servidor iniciado na porta {port}")
+    print("✅ Render funcionando perfeitamente!")
     print("✅ Pronto para uploads!")
     
-    # Não precisamos rodar o Flask manualmente
-    # O gunicorn já está rodando!
-    print("🎯 Sistema ativo via gunicorn!")
+    # Para desenvolvimento local
+    app.run(host='0.0.0.0', port=port, debug=False)
