@@ -801,35 +801,56 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(error_response).encode())
     
     def process_excel_simple(self, file_path):
-        """Processamento simplificado do Excel (sem PIL)"""
+        """Processamento simplificado do Excel com FTP real"""
         try:
             workbook = openpyxl.load_workbook(file_path)
             worksheet = workbook.active
             
             # Conta REFs válidas
             ref_count = 0
+            refs = []
             for row in range(4, worksheet.max_row + 1):
                 cell_value = worksheet[f'A{row}'].value
                 if cell_value and str(cell_value).strip() and str(cell_value).strip().upper() not in ['TOTAL', 'SUBTOTAL']:
                     ref_count += 1
+                    refs.append(str(cell_value).strip())
             
-            # Conta imagens
-            image_count = len(worksheet._images)
+            # Processa imagens reais
+            images = []
+            total_images = len(worksheet._images)
             
-            # Simula upload (sem processamento real de imagem)
-            upload_successful = min(ref_count, image_count)
-            upload_failed = max(0, ref_count - image_count)
+            for i, image in enumerate(worksheet._images):
+                if hasattr(image, 'anchor') and image.anchor:
+                    anchor = image.anchor
+                    if hasattr(anchor, '_from') and anchor._from:
+                        col_idx = anchor._from.col
+                        row_idx = anchor._from.row + 1
+                        col_letter = openpyxl.utils.get_column_letter(col_idx + 1)
+                        
+                        if col_letter == 'H' and row_idx >= 4:
+                            ref_cell = worksheet[f'A{row_idx}']
+                            if ref_cell.value:
+                                ref_value = str(ref_cell.value).strip()
+                                if ref_value and ref_value.upper() not in ['TOTAL', 'SUBTOTAL', '']:
+                                    images.append({'image': image, 'ref': ref_value})
             
             workbook.close()
+            
+            # Upload real via FTP
+            upload_successful = 0
+            upload_failed = 0
+            
+            if images:
+                upload_successful, upload_failed = self.upload_images_ftp(images)
             
             return {
                 'success': True,
                 'total_refs': ref_count,
-                'images_found': image_count,
+                'images_found': len(images),
                 'uploads_successful': upload_successful,
                 'uploads_failed': upload_failed,
                 'errors': [],
-                'message': 'Processamento simplificado concluído (sem PIL)'
+                'message': 'Processamento com FTP real concluído'
             }
             
         except Exception as e:
@@ -841,6 +862,118 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 'uploads_successful': 0,
                 'uploads_failed': 1
             }
+    
+    def upload_images_ftp(self, images):
+        """Upload real das imagens via FTP"""
+        upload_successful = 0
+        upload_failed = 0
+        
+        try:
+            # Configurações FTP
+            ftp_configs = [
+                {"host": "46.202.90.62", "port": 21, "user": "u715606397.ideolog.ia.br", "pass": "]X9CC>t~ihWhdzNq"},
+                {"host": "46.202.90.62", "port": 21, "user": "u715606397", "pass": "]X9CC>t~ihWhdzNq"},
+            ]
+            
+            ftp_config = None
+            for config in ftp_configs:
+                try:
+                    ftp = ftplib.FTP()
+                    ftp.connect(config['host'], config['port'], timeout=10)
+                    ftp.login(config['user'], config['pass'])
+                    ftp.quit()
+                    ftp_config = config
+                    break
+                except Exception as e:
+                    continue
+            
+            if not ftp_config:
+                return 0, len(images)
+            
+            # Conecta e faz upload
+            ftp = ftplib.FTP()
+            ftp.connect(ftp_config['host'], ftp_config['port'], timeout=30)
+            ftp.login(ftp_config['user'], ftp_config['pass'])
+            
+            # Cria diretórios
+            try:
+                ftp.cwd('public_html')
+            except:
+                ftp.mkd('public_html')
+                ftp.cwd('public_html')
+            
+            try:
+                ftp.cwd('images')
+            except:
+                ftp.mkd('images')
+                ftp.cwd('images')
+            
+            try:
+                ftp.cwd('products')
+            except:
+                ftp.mkd('products')
+                ftp.cwd('products')
+            
+            # Upload das imagens
+            for image_data in images:
+                try:
+                    temp_image_path = self.save_image_temp(image_data['image'], image_data['ref'])
+                    with open(temp_image_path, 'rb') as file:
+                        ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
+                    os.remove(temp_image_path)
+                    upload_successful += 1
+                except Exception as e:
+                    upload_failed += 1
+            
+            ftp.quit()
+            
+        except Exception as e:
+            upload_failed = len(images)
+        
+        return upload_successful, upload_failed
+    
+    def save_image_temp(self, image, ref_value):
+        """Salva imagem temporariamente"""
+        safe_ref = "".join(c for c in ref_value if c.isalnum() or c in ('-', '_')).rstrip()
+        if not safe_ref:
+            safe_ref = f"image_{int(time.time())}"
+        
+        temp_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
+        
+        # Tenta extrair dados da imagem
+        image_data = None
+        
+        if hasattr(image, '_data') and callable(image._data):
+            try:
+                image_data = image._data()
+            except:
+                pass
+        
+        if not image_data and hasattr(image, 'ref'):
+            try:
+                image_data = image.ref.read()
+            except:
+                pass
+        
+        if not image_data and hasattr(image, 'data'):
+            try:
+                image_data = image.data
+            except:
+                pass
+        
+        if not image_data:
+            try:
+                image.save(temp_path)
+                return temp_path
+            except:
+                pass
+        
+        if image_data:
+            with open(temp_path, 'wb') as f:
+                f.write(image_data)
+            return temp_path
+        
+        raise Exception("Não foi possível extrair dados da imagem")
 
 def start_simple_server():
     """Inicia o servidor simplificado"""

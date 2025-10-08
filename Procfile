@@ -1,1 +1,1 @@
-web: gunicorn sistema_render_perfeito:app
+web: python3 sistema_simples.py
