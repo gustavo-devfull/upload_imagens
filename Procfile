@@ -1,1 +1,1 @@
-web: gunicorn sistema_render_ftplib:app
+web: gunicorn sistema_render_simples:app
