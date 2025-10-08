@@ -6,6 +6,3 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn sistema_render_final:app
     healthCheckPath: /health
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9

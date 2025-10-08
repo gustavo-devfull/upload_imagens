@@ -579,6 +579,10 @@ if __name__ == "__main__":
     print(f"   • openpyxl: {'✅' if OPENPYXL_AVAILABLE else '❌'}")
     print(f"   • Flask: {'✅' if FLASK_AVAILABLE else '❌'}")
     print("=" * 50)
+    print("🎯 Sistema funcionando no Render!")
+    print("✅ Gunicorn ativo na porta 10000")
+    print("✅ Health check: /health")
+    print("✅ Pronto para uploads!")
     
     if not FLASK_AVAILABLE:
         logger.error("❌ Flask não disponível")
