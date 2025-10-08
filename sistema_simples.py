@@ -901,33 +901,38 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 
                 # Anchors são 0-based tanto para col quanto para row
                 if col_from == target_col_idx and (row_from + 1) == target_row:
-                    # Extrai bytes da imagem com validação
+                    # Extrai bytes da imagem usando método mais confiável
                     try:
-                        # Método 1: Usa o caminho interno do arquivo
-                        with worksheet.parent._archive.open(img.path) as fp:
-                            image_bytes = fp.read()
-                            # Valida se são bytes de imagem válidos
-                            if image_bytes and len(image_bytes) > 100:
-                                return image_bytes
-                    except:
-                        pass
-                    
-                    try:
-                        # Método 2: Fallback usando ref
-                        if hasattr(img, 'ref') and img.ref:
-                            image_bytes = img.ref.read()
-                            if image_bytes and len(image_bytes) > 100:
-                                return image_bytes
-                    except:
-                        pass
-                    
-                    try:
-                        # Método 3: Fallback usando _data
+                        # Método principal: _data() - mais confiável
                         if hasattr(img, '_data') and callable(img._data):
                             image_bytes = img._data()
                             if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via _data(): {len(image_bytes)} bytes")
                                 return image_bytes
-                    except:
+                    except Exception as e:
+                        print(f"❌ Erro _data(): {e}")
+                        pass
+                    
+                    try:
+                        # Método alternativo: Usa o caminho interno do arquivo
+                        with worksheet.parent._archive.open(img.path) as fp:
+                            image_bytes = fp.read()
+                            if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via _archive: {len(image_bytes)} bytes")
+                                return image_bytes
+                    except Exception as e:
+                        print(f"❌ Erro _archive: {e}")
+                        pass
+                    
+                    try:
+                        # Método fallback: ref (pode falhar se arquivo fechado)
+                        if hasattr(img, 'ref') and img.ref:
+                            image_bytes = img.ref.read()
+                            if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via ref: {len(image_bytes)} bytes")
+                                return image_bytes
+                    except Exception as e:
+                        print(f"❌ Erro ref: {e}")
                         pass
             
             return None
