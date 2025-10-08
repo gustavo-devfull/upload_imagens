@@ -567,7 +567,7 @@ def save_image_to_temp(image, ref_value, debug_info):
 app = create_app()
 
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 8080))
+    port = int(os.getenv('PORT', 10000))
     
     logger.info("🚀 Iniciando Sistema Render Final...")
     print("🚀 Iniciando Sistema Render Final...")
