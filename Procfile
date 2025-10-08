@@ -1,1 +1,1 @@
-web: gunicorn --config gunicorn.conf.py sistema_render_definitivo:app
+web: gunicorn sistema_render_perfeito:app

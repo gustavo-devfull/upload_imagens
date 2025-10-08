@@ -1,6 +1,6 @@
 # Configuração Gunicorn para Render
-# O Render usa porta 10000 internamente e faz proxy para 8080
-bind = "0.0.0.0:10000"
+# O Render precisa que o serviço rode na porta 8080
+bind = "0.0.0.0:8080"
 workers = 1
 timeout = 120
 keepalive = 2

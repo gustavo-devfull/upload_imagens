@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: sistema-upload-excel-definitivo
+    name: sistema-upload-excel-perfeito
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --config gunicorn.conf.py sistema_render_definitivo:app
+    startCommand: gunicorn sistema_render_perfeito:app
     healthCheckPath: /health
