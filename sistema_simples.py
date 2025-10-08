@@ -888,18 +888,34 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 
                 # Anchors são 0-based tanto para col quanto para row
                 if col_from == target_col_idx and (row_from + 1) == target_row:
-                    # Extrai bytes da imagem
+                    # Extrai bytes da imagem com validação
                     try:
                         # Método 1: Usa o caminho interno do arquivo
                         with worksheet.parent._archive.open(img.path) as fp:
-                            return fp.read()
+                            image_bytes = fp.read()
+                            # Valida se são bytes de imagem válidos
+                            if image_bytes and len(image_bytes) > 100:
+                                return image_bytes
                     except:
+                        pass
+                    
+                    try:
                         # Método 2: Fallback usando ref
                         if hasattr(img, 'ref') and img.ref:
-                            return img.ref.read()
+                            image_bytes = img.ref.read()
+                            if image_bytes and len(image_bytes) > 100:
+                                return image_bytes
+                    except:
+                        pass
+                    
+                    try:
                         # Método 3: Fallback usando _data
                         if hasattr(img, '_data') and callable(img._data):
-                            return img._data()
+                            image_bytes = img._data()
+                            if image_bytes and len(image_bytes) > 100:
+                                return image_bytes
+                    except:
+                        pass
             
             return None
             
@@ -939,7 +955,7 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             ftp.connect(ftp_config['host'], ftp_config['port'], timeout=timeout)
             ftp.login(ftp_config['user'], ftp_config['pass'])
             
-            # Cria diretórios
+            # Cria diretórios - vai direto para public_html/images/products
             try:
                 ftp.cwd('public_html')
             except:
@@ -971,8 +987,13 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                     with open(temp_image_path, 'wb') as f:
                         f.write(image_data['bytes'])
                     
+                    # Debug: verifica se os bytes são válidos
+                    print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes")
+                    
                     # Upload via FTP com timeout individual
                     with open(temp_image_path, 'rb') as file:
+                        # Usa TYPE I para modo binário
+                        ftp.voidcmd('TYPE I')
                         ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
                     
                     # Remove arquivo temporário
