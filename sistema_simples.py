@@ -698,7 +698,10 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
     def handle_upload(self):
         """Processa uploads de arquivos Excel - versão simplificada"""
         try:
+            print("🔍 Iniciando handle_upload...")
+            
             if not FTP_AVAILABLE or not OPENPYXL_AVAILABLE:
+                print("❌ Dependências não disponíveis")
                 error_response = {
                     'error': 'Dependências não disponíveis no ambiente de deploy',
                     'total_refs': 0,
@@ -714,11 +717,18 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             
             # Lê o arquivo enviado
             content_length = int(self.headers['Content-Length'])
+            print(f"📏 Content-Length: {content_length}")
+            
             post_data = self.rfile.read(content_length)
+            print(f"📦 Dados recebidos: {len(post_data)} bytes")
             
             # Parse do FormData
+            print(f"📋 Content-Type: {self.headers['Content-Type']}")
             boundary = self.headers['Content-Type'].split('boundary=')[1]
+            print(f"🔗 Boundary: {boundary}")
+            
             parts = post_data.split(f'--{boundary}'.encode())
+            print(f"📄 Partes encontradas: {len(parts)}")
             
             file_data = None
             filename = None
@@ -786,7 +796,9 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             
         except Exception as e:
+            print(f"❌ Erro no handle_upload: {e}")
             error_response = {
+                'success': False,
                 'error': str(e),
                 'total_refs': 0,
                 'images_found': 0,
@@ -795,8 +807,9 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             }
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps(error_response).encode())
+            self.wfile.write(json.dumps(error_response, ensure_ascii=False).encode('utf-8'))
     
     def process_excel_simple(self, file_path):
         """Processamento do Excel com configurações corretas para Render"""
