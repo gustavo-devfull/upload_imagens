@@ -753,10 +753,13 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 self.send_error(400, 'Arquivo não encontrado')
                 return
             
-            # Salva arquivo temporariamente
-            temp_path = os.path.join(tempfile.gettempdir(), filename)
-            with open(temp_path, 'wb') as f:
-                f.write(file_data)
+            # Salva arquivo temporariamente com suffix .xlsx
+            from tempfile import NamedTemporaryFile
+            temp_file = NamedTemporaryFile(delete=False, suffix=".xlsx")
+            temp_file.write(file_data)
+            temp_file.flush()
+            temp_file.close()
+            temp_path = temp_file.name
             
             # Processamento simplificado (sem PIL)
             stats = self.process_excel_simple(temp_path)
@@ -801,9 +804,10 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(error_response).encode())
     
     def process_excel_simple(self, file_path):
-        """Processamento simplificado do Excel com FTP real"""
+        """Processamento do Excel com configurações corretas para Render"""
         try:
-            workbook = openpyxl.load_workbook(file_path)
+            # Configuração correta para carregar imagens
+            workbook = openpyxl.load_workbook(file_path, data_only=True, read_only=False, keep_links=False)
             worksheet = workbook.active
             
             # Conta REFs válidas
@@ -815,24 +819,25 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                     ref_count += 1
                     refs.append(str(cell_value).strip())
             
-            # Processa imagens reais
+            # Processa imagens usando método robusto por anchor
             images = []
             total_images = len(worksheet._images)
             
-            for i, image in enumerate(worksheet._images):
-                if hasattr(image, 'anchor') and image.anchor:
-                    anchor = image.anchor
-                    if hasattr(anchor, '_from') and anchor._from:
-                        col_idx = anchor._from.col
-                        row_idx = anchor._from.row + 1
-                        col_letter = openpyxl.utils.get_column_letter(col_idx + 1)
-                        
-                        if col_letter == 'H' and row_idx >= 4:
-                            ref_cell = worksheet[f'A{row_idx}']
-                            if ref_cell.value:
-                                ref_value = str(ref_cell.value).strip()
-                                if ref_value and ref_value.upper() not in ['TOTAL', 'SUBTOTAL', '']:
-                                    images.append({'image': image, 'ref': ref_value})
+            # Para cada REF, busca imagem na célula H correspondente
+            for ref_value in refs:
+                # Encontra a linha da REF
+                ref_row = None
+                for row in range(4, worksheet.max_row + 1):
+                    cell_value = worksheet[f'A{row}'].value
+                    if cell_value and str(cell_value).strip() == ref_value:
+                        ref_row = row
+                        break
+                
+                if ref_row:
+                    # Busca imagem na célula H{ref_row}
+                    image_bytes = self.find_image_by_cell(worksheet, f'H{ref_row}')
+                    if image_bytes:
+                        images.append({'ref': ref_value, 'bytes': image_bytes, 'row': ref_row})
             
             workbook.close()
             
@@ -850,7 +855,7 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 'uploads_successful': upload_successful,
                 'uploads_failed': upload_failed,
                 'errors': [],
-                'message': 'Processamento com FTP real concluído'
+                'message': 'Processamento com configurações corretas concluído'
             }
             
         except Exception as e:
@@ -862,6 +867,49 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 'uploads_successful': 0,
                 'uploads_failed': 1
             }
+    
+    def find_image_by_cell(self, worksheet, cell_addr):
+        """Encontra imagem por célula usando anchor - método robusto"""
+        try:
+            # Normaliza endereço da célula (ex: "H23")
+            cell_addr = cell_addr.upper()
+            target_col_letter = ''.join([c for c in cell_addr if c.isalpha()])
+            target_row = int(''.join([c for c in cell_addr if c.isdigit()]))
+            
+            # Converte coluna para índice 0-based
+            target_col_idx = openpyxl.utils.column_index_from_string(target_col_letter) - 1
+            
+            # Itera imagens da planilha e checa o anchor
+            for img in getattr(worksheet, "_images", []):
+                anchor = img.anchor
+                try:
+                    # Quando é TwoCellAnchor
+                    col_from = anchor._from.col
+                    row_from = anchor._from.row
+                except AttributeError:
+                    # Quando é OneCellAnchor
+                    col_from = anchor.col
+                    row_from = anchor.row
+                
+                # Anchors são 0-based tanto para col quanto para row
+                if col_from == target_col_idx and (row_from + 1) == target_row:
+                    # Extrai bytes da imagem
+                    try:
+                        # Método 1: Usa o caminho interno do arquivo
+                        with worksheet.parent._archive.open(img.path) as fp:
+                            return fp.read()
+                    except:
+                        # Método 2: Fallback usando ref
+                        if hasattr(img, 'ref') and img.ref:
+                            return img.ref.read()
+                        # Método 3: Fallback usando _data
+                        if hasattr(img, '_data') and callable(img._data):
+                            return img._data()
+            
+            return None
+            
+        except Exception as e:
+            return None
     
     def upload_images_ftp(self, images):
         """Upload real das imagens via FTP"""
@@ -914,12 +962,23 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 ftp.mkd('products')
                 ftp.cwd('products')
             
-            # Upload das imagens
+            # Upload das imagens usando bytes diretamente
             for image_data in images:
                 try:
-                    temp_image_path = self.save_image_temp(image_data['image'], image_data['ref'])
+                    # Salva bytes da imagem temporariamente
+                    safe_ref = "".join(c for c in image_data['ref'] if c.isalnum() or c in ('-', '_')).rstrip()
+                    if not safe_ref:
+                        safe_ref = f"image_{int(time.time())}"
+                    
+                    temp_image_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
+                    with open(temp_image_path, 'wb') as f:
+                        f.write(image_data['bytes'])
+                    
+                    # Upload via FTP
                     with open(temp_image_path, 'rb') as file:
                         ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
+                    
+                    # Remove arquivo temporário
                     os.remove(temp_image_path)
                     upload_successful += 1
                 except Exception as e:
@@ -932,48 +991,6 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
         
         return upload_successful, upload_failed
     
-    def save_image_temp(self, image, ref_value):
-        """Salva imagem temporariamente"""
-        safe_ref = "".join(c for c in ref_value if c.isalnum() or c in ('-', '_')).rstrip()
-        if not safe_ref:
-            safe_ref = f"image_{int(time.time())}"
-        
-        temp_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
-        
-        # Tenta extrair dados da imagem
-        image_data = None
-        
-        if hasattr(image, '_data') and callable(image._data):
-            try:
-                image_data = image._data()
-            except:
-                pass
-        
-        if not image_data and hasattr(image, 'ref'):
-            try:
-                image_data = image.ref.read()
-            except:
-                pass
-        
-        if not image_data and hasattr(image, 'data'):
-            try:
-                image_data = image.data
-            except:
-                pass
-        
-        if not image_data:
-            try:
-                image.save(temp_path)
-                return temp_path
-            except:
-                pass
-        
-        if image_data:
-            with open(temp_path, 'wb') as f:
-                f.write(image_data)
-            return temp_path
-        
-        raise Exception("Não foi possível extrair dados da imagem")
 
 def start_simple_server():
     """Inicia o servidor simplificado"""
