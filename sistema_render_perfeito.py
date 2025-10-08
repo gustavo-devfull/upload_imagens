@@ -391,12 +391,28 @@ def process_excel(file_path, debug_info):
         logger.info(f"🖼️ Total de imagens: {total_images}")
         debug_info.append(f"🖼️ Total de imagens: {total_images}")
         
+        # Debug adicional para entender a estrutura das imagens
+        debug_info.append(f"🔍 Debug imagens:")
+        debug_info.append(f"   • worksheet._images: {type(worksheet._images)}")
+        debug_info.append(f"   • len(worksheet._images): {len(worksheet._images)}")
+        
+        if len(worksheet._images) > 0:
+            debug_info.append(f"   • Primeira imagem: {type(worksheet._images[0])}")
+            debug_info.append(f"   • Atributos da primeira imagem: {dir(worksheet._images[0])}")
+        
         for i, image in enumerate(worksheet._images):
             logger.info(f"🖼️ Analisando imagem {i+1}/{total_images}")
             debug_info.append(f"🖼️ Analisando imagem {i+1}/{total_images}")
             
+            # Debug detalhado da imagem
+            debug_info.append(f"   • Tipo da imagem: {type(image)}")
+            debug_info.append(f"   • Atributos: {[attr for attr in dir(image) if not attr.startswith('_')]}")
+            
             if hasattr(image, 'anchor') and image.anchor:
                 anchor = image.anchor
+                debug_info.append(f"   • Anchor: {anchor}")
+                debug_info.append(f"   • Anchor atributos: {[attr for attr in dir(anchor) if not attr.startswith('_')]}")
+                
                 if hasattr(anchor, '_from') and anchor._from:
                     col_idx = anchor._from.col
                     row_idx = anchor._from.row + 1
@@ -404,15 +420,33 @@ def process_excel(file_path, debug_info):
                     
                     logger.info(f"📍 Posição: {col_letter}{row_idx}")
                     debug_info.append(f"📍 Posição: {col_letter}{row_idx}")
+                    debug_info.append(f"   • col_idx: {col_idx}")
+                    debug_info.append(f"   • row_idx: {row_idx}")
+                    debug_info.append(f"   • col_letter: {col_letter}")
                     
+                    # Verifica se está na coluna H e linha >= 4
                     if col_letter == 'H' and row_idx >= 4:
                         ref_cell = worksheet[f'A{row_idx}']
+                        debug_info.append(f"   • REF cell A{row_idx}: {ref_cell.value}")
+                        
                         if ref_cell.value:
                             ref_value = str(ref_cell.value).strip()
+                            debug_info.append(f"   • REF value: '{ref_value}'")
+                            
                             if ref_value and ref_value.upper() not in ['TOTAL', 'SUBTOTAL', '']:
                                 logger.info(f"✅ Imagem válida: REF {ref_value}")
                                 debug_info.append(f"✅ Imagem válida: REF {ref_value}")
                                 images.append({'image': image, 'ref': ref_value})
+                            else:
+                                debug_info.append(f"❌ REF inválida: '{ref_value}'")
+                        else:
+                            debug_info.append(f"❌ Célula A{row_idx} vazia")
+                    else:
+                        debug_info.append(f"❌ Posição não válida: {col_letter}{row_idx} (precisa ser H e >= 4)")
+                else:
+                    debug_info.append(f"❌ Anchor._from não encontrado")
+            else:
+                debug_info.append(f"❌ Anchor não encontrado na imagem")
         
         logger.info(f"📊 Imagens válidas: {len(images)}")
         debug_info.append(f"📊 Imagens válidas: {len(images)}")
