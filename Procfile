@@ -1,1 +1,1 @@
-web: python sistema_simples.py
+web: python sistema_flask_debug.py

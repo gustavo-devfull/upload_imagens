@@ -457,7 +457,7 @@ def create_flask_app():
     def health():
         return jsonify({
             "status": "ok",
-            "message": "Sistema Flask Debug para Render funcionando",
+            "message": "Sistema Flask Debug para Railway funcionando",
             "dependencies": {
                 "ftp": FTP_AVAILABLE,
                 "openpyxl": OPENPYXL_AVAILABLE,
@@ -479,7 +479,8 @@ def create_flask_app():
                 "Detecção de imagens com debug",
                 "Upload FTP automático",
                 "Validação de arquivos",
-                "Logs detalhados"
+                "Logs detalhados",
+                "Deploy no Railway"
             ]
         })
     
@@ -642,7 +643,7 @@ def process_excel_flask_debug(file_path, debug_info):
             'uploads_successful': uploads_successful,
             'uploads_failed': uploads_failed,
             'errors': errors,
-            'message': 'Processamento Flask Debug concluído com detecção de imagens'
+            'message': 'Processamento Flask Debug Railway concluído com detecção de imagens'
         }
         
     except Exception as e:
@@ -911,10 +912,10 @@ def save_image_to_temp(image, ref_value):
 
 def start_flask_server():
     """Inicia o servidor Flask com debug"""
-    port = int(os.getenv('PORT', 8080))
+    port = int(os.getenv('PORT', 8080))  # Railway usa PORT automático
     
-    logger.info("🚀 Iniciando Sistema Flask Debug para Render...")
-    print("🚀 Iniciando Sistema Flask Debug para Render...")
+    logger.info("🚀 Iniciando Sistema Flask Debug para Railway...")
+    print("🚀 Iniciando Sistema Flask Debug para Railway...")
     print("=" * 50)
     print(f"📁 Frontend: http://localhost:{port}")
     print(f"🔧 API: http://localhost:{port}/upload")
