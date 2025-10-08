@@ -1,14 +1,11 @@
 services:
   - type: web
-    name: sistema-upload-excel-render
+    name: sistema-upload-excel-ftplib
     env: python
-    pythonVersion: 3.11.9
-    buildCommand: pip install --upgrade pip && pip install -r requirements_simples.txt
-    startCommand: python sistema_flask_debug.py
-    envVars:
-      - key: PORT
-        value: 8080
-      - key: PYTHONUNBUFFERED
-        value: 1
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn sistema_render_ftplib:app
     healthCheckPath: /health
-    plan: starter
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9

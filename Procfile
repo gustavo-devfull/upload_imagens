@@ -1,1 +1,1 @@
-web: python sistema_railway_basico.py
+web: gunicorn sistema_render_ftplib:app
