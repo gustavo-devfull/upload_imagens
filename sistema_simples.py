@@ -567,7 +567,21 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 method: 'POST',
                 body: formData,
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(text => {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Erro ao fazer parse do JSON:', e);
+                    console.error('Resposta recebida:', text);
+                    throw new Error('Resposta inválida do servidor');
+                }
+            })
             .then(data => {
                 clearInterval(progressInterval);
                 clearInterval(timerInterval);
@@ -582,8 +596,16 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 // Atualiza progresso final com informações detalhadas
                 document.getElementById('progressFill').style.width = '100%';
                 if (data.uploads_successful > 0) {
-                    document.getElementById('progressText').textContent = `✅ Upload concluído! ${data.uploads_successful} imagem(ns) enviada(s)`;
-                    document.getElementById('progressStatus').textContent = `✅ ${data.uploads_successful} imagem(ns) enviada(s) com sucesso`;
+                    const totalImages = data.images_found || 0;
+                    const successRate = totalImages > 0 ? ((data.uploads_successful / totalImages) * 100).toFixed(1) : 0;
+                    
+                    if (totalImages > 30) {
+                        document.getElementById('progressText').textContent = `✅ Upload concluído! ${data.uploads_successful}/${totalImages} imagens enviadas (${successRate}% sucesso)`;
+                        document.getElementById('progressStatus').textContent = `✅ Upload em lote concluído: ${data.uploads_successful} de ${totalImages} imagens`;
+                    } else {
+                        document.getElementById('progressText').textContent = `✅ Upload concluído! ${data.uploads_successful} imagem(ns) enviada(s)`;
+                        document.getElementById('progressStatus').textContent = `✅ ${data.uploads_successful} imagem(ns) enviada(s) com sucesso`;
+                    }
                 } else if (data.error) {
                     document.getElementById('progressText').textContent = `❌ ${data.error}`;
                     document.getElementById('progressStatus').textContent = `❌ Erro: ${data.error}`;
@@ -635,10 +657,18 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             `;
 
             if (data.error) {
-                html += `<div class="warning-box"><h3>⚠️ Arquivo sem imagens</h3><p>${data.error}</p>`;
+                html += `<div class="warning-box"><h3>⚠️ Problema no Processamento</h3><p>${data.error}</p>`;
                 if (data.suggestion) {
                     html += `<p><strong>💡 Sugestão:</strong> ${data.suggestion}</p>`;
                 }
+                html += `</div>`;
+            } else if (data.images_found > 30) {
+                html += `<div class="status-box"><h3>📤 Upload em Lote Concluído</h3>`;
+                html += `<p><strong>Total de imagens:</strong> ${data.images_found}</p>`;
+                html += `<p><strong>Uploads bem-sucedidos:</strong> ${data.uploads_successful}</p>`;
+                html += `<p><strong>Uploads falharam:</strong> ${data.uploads_failed}</p>`;
+                html += `<p><strong>Taxa de sucesso:</strong> ${data.images_found > 0 ? ((data.uploads_successful / data.images_found) * 100).toFixed(1) : 0}%</p>`;
+                html += `<p><strong>URL das imagens:</strong> <a href="https://ideolog.ia.br/images/products/" target="_blank">https://ideolog.ia.br/images/products/</a></p>`;
                 html += `</div>`;
             }
 
@@ -782,13 +812,21 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 return
             
             # Remove arquivo temporário
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except:
+                pass
             
-            # Envia resposta
+            # Envia resposta com timeout maior para muitos uploads
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps(stats).encode())
+            
+            # Garante que a resposta JSON está completa
+            response_data = json.dumps(stats, ensure_ascii=False)
+            self.wfile.write(response_data.encode('utf-8'))
+            self.wfile.flush()
             
         except Exception as e:
             error_response = {
@@ -912,7 +950,7 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             return None
     
     def upload_images_ftp(self, images):
-        """Upload real das imagens via FTP"""
+        """Upload real das imagens via FTP com timeout maior para muitos uploads"""
         upload_successful = 0
         upload_failed = 0
         
@@ -927,7 +965,7 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             for config in ftp_configs:
                 try:
                     ftp = ftplib.FTP()
-                    ftp.connect(config['host'], config['port'], timeout=10)
+                    ftp.connect(config['host'], config['port'], timeout=15)
                     ftp.login(config['user'], config['pass'])
                     ftp.quit()
                     ftp_config = config
@@ -938,9 +976,10 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             if not ftp_config:
                 return 0, len(images)
             
-            # Conecta e faz upload
+            # Conecta com timeout maior para muitos uploads
             ftp = ftplib.FTP()
-            ftp.connect(ftp_config['host'], ftp_config['port'], timeout=30)
+            timeout = 60 if len(images) > 30 else 30  # Timeout maior para muitos uploads
+            ftp.connect(ftp_config['host'], ftp_config['port'], timeout=timeout)
             ftp.login(ftp_config['user'], ftp_config['pass'])
             
             # Cria diretórios
@@ -962,8 +1001,9 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 ftp.mkd('products')
                 ftp.cwd('products')
             
-            # Upload das imagens usando bytes diretamente
-            for image_data in images:
+            # Upload das imagens com progresso
+            total_images = len(images)
+            for i, image_data in enumerate(images):
                 try:
                     # Salva bytes da imagem temporariamente
                     safe_ref = "".join(c for c in image_data['ref'] if c.isalnum() or c in ('-', '_')).rstrip()
@@ -974,20 +1014,31 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                     with open(temp_image_path, 'wb') as f:
                         f.write(image_data['bytes'])
                     
-                    # Upload via FTP
+                    # Upload via FTP com timeout individual
                     with open(temp_image_path, 'rb') as file:
                         ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
                     
                     # Remove arquivo temporário
-                    os.remove(temp_image_path)
+                    try:
+                        os.remove(temp_image_path)
+                    except:
+                        pass
+                    
                     upload_successful += 1
+                    
+                    # Log de progresso para muitos uploads
+                    if total_images > 30 and (i + 1) % 10 == 0:
+                        print(f"📤 Upload progress: {i + 1}/{total_images} ({((i + 1) / total_images) * 100:.1f}%)")
+                    
                 except Exception as e:
                     upload_failed += 1
+                    print(f"❌ Erro no upload {image_data['ref']}: {e}")
             
             ftp.quit()
             
         except Exception as e:
             upload_failed = len(images)
+            print(f"❌ Erro geral no FTP: {e}")
         
         return upload_successful, upload_failed
     
