@@ -1,1 +1,1 @@
-web: gunicorn sistema_render_funcionando:app
+web: gunicorn --config gunicorn.conf.py sistema_render_correto:app

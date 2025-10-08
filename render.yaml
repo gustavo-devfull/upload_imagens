@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: sistema-upload-excel-funcionando
+    name: sistema-upload-excel-correto
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn sistema_render_funcionando:app
+    startCommand: gunicorn --config gunicorn.conf.py sistema_render_correto:app
     healthCheckPath: /health
