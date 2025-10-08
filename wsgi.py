@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-WSGI entry point for Render deployment
+WSGI Configuration para PythonAnywhere
+Arquivo de configuração WSGI para deploy no PythonAnywhere
 """
 
+import sys
 import os
-from app_simple_render import app
 
+# Adiciona o diretório do projeto ao path
+path = '/home/seu_usuario/sistema_upload_excel'
+if path not in sys.path:
+    sys.path.append(path)
+
+# Importa a aplicação Flask
+from sistema_pythonanywhere import app
+
+# Configuração para PythonAnywhere
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run()
