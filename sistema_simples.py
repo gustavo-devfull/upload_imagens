@@ -1026,8 +1026,8 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         if img.mode in ('RGBA', 'LA', 'P'):
                             img = img.convert('RGB')
                         
-                        # Salva como JPEG válido com configurações compatíveis
-                        img.save(temp_image_path, 'JPEG', quality=95, optimize=False, progressive=False)
+                        # Salva como JPEG com configurações máximas para contornar processamento do servidor
+                        img.save(temp_image_path, 'JPEG', quality=100, optimize=False, progressive=False, subsampling=0)
                         
                         print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
                         
@@ -1050,6 +1050,24 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         os.remove(temp_image_path)
                     except:
                         pass
+                    
+                    # Validação pós-upload: verifica se arquivo processado pelo servidor ainda funciona
+                    try:
+                        import requests
+                        image_url = f"https://ideolog.ia.br/images/products/{image_data['ref']}.jpg"
+                        
+                        # Baixa arquivo processado pelo servidor
+                        response = requests.get(image_url, timeout=10)
+                        if response.status_code == 200:
+                            # Verifica se ainda é JPEG válido
+                            if response.content.startswith(b'\xff\xd8'):
+                                print(f"✅ Validação pós-upload: JPEG válido após processamento do servidor")
+                            else:
+                                print(f"⚠️ Validação pós-upload: Arquivo não é mais JPEG válido")
+                        else:
+                            print(f"⚠️ Validação pós-upload: Não foi possível baixar arquivo")
+                    except Exception as e:
+                        print(f"⚠️ Validação pós-upload falhou: {e}")
                     
                     upload_successful += 1
                     
