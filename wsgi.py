@@ -8,5 +8,5 @@ if path not in sys.path:
     sys.path.append(path)
 
 # Importa a aplicação Flask
-from sistema_sftp_melhorado import app
+from sistema_ssh_65002 import app
 application = app
