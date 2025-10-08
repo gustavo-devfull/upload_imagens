@@ -1017,8 +1017,8 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         if img.mode in ('RGBA', 'LA', 'P'):
                             img = img.convert('RGB')
                         
-                        # Salva como JPEG válido
-                        img.save(temp_image_path, 'JPEG', quality=95, optimize=True)
+                        # Salva como JPEG válido com configurações compatíveis
+                        img.save(temp_image_path, 'JPEG', quality=95, optimize=False, progressive=False)
                         
                         print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes → JPEG válido")
                         print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
