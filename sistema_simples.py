@@ -381,26 +381,6 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
         </div>
 
         <div class="content">
-            <div class="status-box">
-                <h3>✅ Sistema Simplificado Funcionando</h3>
-                <p>Esta versão foi otimizada para funcionar em serviços de deploy sem dependências complexas</p>
-                <p><strong>Modo:</strong> Simplificado (Sem PIL)</p>
-                <p><strong>Upload:</strong> Via FTP para https://ideolog.ia.br/images/products/</p>
-            </div>
-
-            <div id="dependenciesStatus"></div>
-
-            <div class="info-box">
-                <h3>📋 Informações Importantes</h3>
-                <ul>
-                    <li><strong>Coluna REF:</strong> A (códigos dos produtos)</li>
-                    <li><strong>Coluna PHOTO:</strong> H (imagens)</li>
-                    <li><strong>Linha inicial:</strong> 4</li>
-                    <li><strong>Formato:</strong> Apenas arquivos .xlsx</li>
-                    <li><strong>Limite:</strong> 50MB por arquivo</li>
-                </ul>
-            </div>
-
             <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">Clique para selecionar arquivo Excel</div>
@@ -461,29 +441,6 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
     <script>
         let selectedFile = null;
 
-        // Verifica status das dependências
-        fetch('/config')
-            .then(response => response.json())
-            .then(data => {
-                const statusDiv = document.getElementById('dependenciesStatus');
-                let html = '';
-                
-                if (data.dependencies) {
-                    if (data.dependencies.ftp_available) {
-                        html += '<div class="status-box"><h3>✅ FTP Disponível</h3><p>Sistema de upload FTP funcionando</p></div>';
-                    } else {
-                        html += '<div class="warning-box"><h3>⚠️ FTP Indisponível</h3><p>Sistema de upload FTP não está disponível</p></div>';
-                    }
-                    
-                    if (data.dependencies.openpyxl_available) {
-                        html += '<div class="status-box"><h3>✅ Excel Disponível</h3><p>Processamento de arquivos Excel funcionando</p></div>';
-                    } else {
-                        html += '<div class="warning-box"><h3>⚠️ Excel Indisponível</h3><p>Processamento de Excel não está disponível</p></div>';
-                    }
-                }
-                
-                statusDiv.innerHTML = html;
-            });
 
         function handleFileSelect(file) {
             if (file && file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
