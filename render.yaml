@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: sistema-upload-excel-simples
+    name: sistema-upload-excel-final
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn sistema_render_simples:app
+    startCommand: gunicorn sistema_render_final:app
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
