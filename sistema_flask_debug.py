@@ -455,17 +455,35 @@ def create_flask_app():
     
     @app.route('/health')
     def health():
-        return jsonify({
-            "status": "ok",
-            "message": "Sistema Flask Debug para Railway funcionando",
-            "dependencies": {
-                "ftp": FTP_AVAILABLE,
-                "openpyxl": OPENPYXL_AVAILABLE,
-                "flask": FLASK_AVAILABLE,
-                "pil": False
-            },
-            "timestamp": time.time()
-        })
+        try:
+            # Teste básico de dependências
+            health_status = {
+                "status": "ok",
+                "message": "Sistema Flask Debug para Railway funcionando",
+                "dependencies": {
+                    "ftp": FTP_AVAILABLE,
+                    "openpyxl": OPENPYXL_AVAILABLE,
+                    "flask": FLASK_AVAILABLE,
+                    "pil": False
+                },
+                "timestamp": time.time(),
+                "uptime": time.time() - start_time if 'start_time' in globals() else 0
+            }
+            
+            # Verifica se todas as dependências críticas estão disponíveis
+            if not OPENPYXL_AVAILABLE or not FLASK_AVAILABLE:
+                health_status["status"] = "error"
+                health_status["message"] = "Dependências críticas não disponíveis"
+            
+            return jsonify(health_status), 200
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no health check: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"Erro no health check: {str(e)}",
+                "timestamp": time.time()
+            }), 500
     
     @app.route('/config')
     def config():
@@ -912,6 +930,9 @@ def save_image_to_temp(image, ref_value):
 
 def start_flask_server():
     """Inicia o servidor Flask com debug"""
+    global start_time
+    start_time = time.time()
+    
     port = int(os.getenv('PORT', 8080))  # Railway usa PORT automático
     
     logger.info("🚀 Iniciando Sistema Flask Debug para Railway...")
@@ -942,7 +963,7 @@ def start_flask_server():
             logger.info(f"✅ Servidor Flask iniciado na porta {port}")
             print(f"✅ Servidor Flask iniciado na porta {port}")
             print("🔄 Aguardando conexões...")
-            app.run(host='0.0.0.0', port=port, debug=False)
+            app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
         except Exception as e:
             logger.error(f"❌ Erro ao iniciar servidor Flask: {e}")
             print(f"❌ Erro ao iniciar servidor Flask: {e}")
