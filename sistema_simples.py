@@ -955,7 +955,10 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             ftp.connect(ftp_config['host'], ftp_config['port'], timeout=timeout)
             ftp.login(ftp_config['user'], ftp_config['pass'])
             
-            # Cria diretórios - vai direto para public_html/images/products
+            # Vai direto para o diretório raiz e cria estrutura correta
+            ftp.cwd('/')  # Volta para raiz
+            
+            # Cria estrutura: public_html/images/products
             try:
                 ftp.cwd('public_html')
             except:
@@ -973,6 +976,9 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             except:
                 ftp.mkd('products')
                 ftp.cwd('products')
+            
+            # Debug: mostra diretório atual
+            print(f"📁 Diretório atual FTP: {ftp.pwd()}")
             
             # Upload das imagens com progresso
             total_images = len(images)
@@ -1002,12 +1008,14 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         img.save(temp_image_path, 'JPEG', quality=95, optimize=True)
                         
                         print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes → JPEG válido")
+                        print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
                         
                     except Exception as e:
                         # Fallback: salva bytes originais
                         with open(temp_image_path, 'wb') as f:
                             f.write(image_data['bytes'])
                         print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback)")
+                        print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
                     
                     # Upload via FTP com timeout individual
                     with open(temp_image_path, 'rb') as file:
