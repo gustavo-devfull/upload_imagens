@@ -1013,6 +1013,10 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         image_stream = io.BytesIO(image_data['bytes'])
                         img = Image.open(image_stream)
                         
+                        # Detecta formato original
+                        original_format = img.format
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG")
+                        
                         # Converte para RGB se necessário
                         if img.mode in ('RGBA', 'LA', 'P'):
                             img = img.convert('RGB')
@@ -1020,14 +1024,14 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         # Salva como JPEG válido com configurações compatíveis
                         img.save(temp_image_path, 'JPEG', quality=95, optimize=False, progressive=False)
                         
-                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes → JPEG válido")
                         print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
                         
                     except Exception as e:
-                        # Fallback: salva bytes originais
+                        print(f"❌ Erro na conversão PIL: {e}")
+                        # Fallback: salva bytes originais (pode não funcionar no Photoshop)
                         with open(temp_image_path, 'wb') as f:
                             f.write(image_data['bytes'])
-                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback)")
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback - pode não abrir no Photoshop)")
                         print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
                     
                     # Upload via FTP com timeout individual
