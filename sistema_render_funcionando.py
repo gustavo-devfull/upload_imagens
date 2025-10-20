@@ -577,7 +577,9 @@ app = create_app()
 # Isso é normal e esperado!
 
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 8080))
+    # No Render, o gunicorn define a porta automaticamente
+    # Não precisamos definir porta manualmente
+    port = int(os.getenv('PORT', 8080))  # Usar porta do Render
     
     logger.info("🚀 Sistema Render Funcionando!")
     print("🚀 Sistema Render Funcionando!")

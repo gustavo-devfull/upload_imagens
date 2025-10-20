@@ -29,6 +29,307 @@ except ImportError as e:
     print(f"⚠️  ftplib não disponível: {e}")
     FTP_AVAILABLE = False
 
+class SistemaExcelProcessor:
+    """Classe para processamento de arquivos Excel"""
+    
+    def extract_internal_images(self, file_path):
+        """Extrai imagens internas do arquivo Excel quando não há imagens embebidas"""
+        try:
+            import zipfile
+            
+            print(f"🔍 Extraindo imagens internas de {file_path}")
+            internal_images = []
+            
+            with zipfile.ZipFile(file_path, 'r') as zip_file:
+                # Lista arquivos de imagem
+                image_files = [f for f in zip_file.namelist() if f.startswith('xl/media/') and f.endswith('.jpg')]
+                
+                print(f"📊 Arquivos de imagem internos encontrados: {len(image_files)}")
+                
+                for i, img_file in enumerate(image_files):
+                    try:
+                        # Extrai dados da imagem
+                        img_data = zip_file.read(img_file)
+                        
+                        print(f"   📷 {img_file}: {len(img_data)} bytes")
+                        
+                        # Verifica se é JPEG válido
+                        if len(img_data) >= 8 and img_data.startswith(b'\xff\xd8'):
+                            internal_images.append({
+                                'index': i,
+                                'filename': img_file,
+                                'bytes': img_data,
+                                'size': len(img_data)
+                            })
+                            print(f"      ✅ JPEG válido")
+                        else:
+                            print(f"      ❌ JPEG inválido")
+                    
+                    except Exception as e:
+                        print(f"   ❌ Erro ao extrair {img_file}: {e}")
+            
+            print(f"✅ Total de imagens internas extraídas: {len(internal_images)}")
+            return internal_images
+            
+        except Exception as e:
+            print(f"❌ Erro ao extrair imagens internas: {e}")
+            return []
+
+    def find_image_by_cell(self, worksheet, cell_addr):
+        """Encontra imagem por célula usando anchor - método robusto"""
+        try:
+            # Normaliza endereço da célula (ex: "H23")
+            cell_addr = cell_addr.upper()
+            target_col_letter = ''.join([c for c in cell_addr if c.isalpha()])
+            target_row = int(''.join([c for c in cell_addr if c.isdigit()]))
+            
+            # Converte coluna para índice 0-based
+            target_col_idx = openpyxl.utils.column_index_from_string(target_col_letter) - 1
+            
+            # Itera imagens da planilha e checa o anchor
+            for img in getattr(worksheet, "_images", []):
+                anchor = img.anchor
+                try:
+                    # Quando é TwoCellAnchor
+                    col_from = anchor._from.col
+                    row_from = anchor._from.row
+                except AttributeError:
+                    # Quando é OneCellAnchor
+                    col_from = anchor.col
+                    row_from = anchor.row
+                
+                # Anchors são 0-based tanto para col quanto para row
+                if col_from == target_col_idx and (row_from + 1) == target_row:
+                    # Extrai bytes da imagem usando método mais confiável
+                    try:
+                        # Método principal: _data() - mais confiável
+                        if hasattr(img, '_data') and callable(img._data):
+                            image_bytes = img._data()
+                            if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via _data(): {len(image_bytes)} bytes")
+                                return image_bytes
+                    except Exception as e:
+                        print(f"❌ Erro _data(): {e}")
+                        pass
+                    
+                    try:
+                        # Método alternativo: Usa o caminho interno do arquivo
+                        with worksheet.parent._archive.open(img.path) as fp:
+                            image_bytes = fp.read()
+                            if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via _archive: {len(image_bytes)} bytes")
+                                return image_bytes
+                    except Exception as e:
+                        print(f"❌ Erro _archive: {e}")
+                        pass
+                    
+                    try:
+                        # Método fallback: ref (pode falhar se arquivo fechado)
+                        if hasattr(img, 'ref') and img.ref:
+                            image_bytes = img.ref.read()
+                            if image_bytes and len(image_bytes) > 100:
+                                print(f"✅ Imagem extraída via ref: {len(image_bytes)} bytes")
+                                return image_bytes
+                    except Exception as e:
+                        print(f"❌ Erro ref: {e}")
+                        pass
+            
+            return None
+            
+        except Exception as e:
+            return None
+
+    def upload_images_ftp(self, images):
+        """Upload real das imagens via FTP com timeout maior para muitos uploads"""
+        upload_successful = 0
+        upload_failed = 0
+        
+        if not FTP_AVAILABLE:
+            print("❌ FTP não disponível - simulando upload")
+            for image_data in images:
+                print(f"📤 Simulação: {image_data['ref']}.jpg ({len(image_data['bytes'])} bytes)")
+                upload_successful += 1
+            return upload_successful, upload_failed
+        
+        try:
+            # Configurações FTP
+            ftp_host = "ftp.ideolog.ia.br"
+            ftp_user = "ideologia"
+            ftp_pass = "Ideolog2024!"
+            ftp_path = "/images/products/"
+            
+            print(f"🔗 Conectando FTP: {ftp_host}")
+            
+            # Conecta FTP
+            ftp = ftplib.FTP()
+            ftp.connect(ftp_host, 21)
+            ftp.login(ftp_user, ftp_pass)
+            ftp.cwd(ftp_path)
+            
+            print(f"✅ Conectado FTP - diretório: {ftp_path}")
+            
+            # Upload de cada imagem
+            for image_data in images:
+                try:
+                    # Cria arquivo temporário
+                    temp_image_path = f"/tmp/{image_data['ref']}.jpg"
+                    
+                    # Abre a imagem dos bytes
+                    image_stream = io.BytesIO(image_data['bytes'])
+                    img = Image.open(image_stream)
+                    
+                    # Detecta formato original
+                    original_format = img.format
+                    source_info = image_data.get('source', 'unknown')
+                    filename_info = f" ({image_data.get('filename', '')})" if 'filename' in image_data else ""
+                    print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG [{source_info}]{filename_info}")
+                    
+                    # Converte para RGB se necessário
+                    if img.mode in ('RGBA', 'LA', 'P'):
+                        img = img.convert('RGB')
+                    
+                    # Salva como JPEG com configurações otimizadas para compatibilidade
+                    img.save(temp_image_path, 'JPEG', quality=100, optimize=False, progressive=False, subsampling=0)
+                    
+                    # Upload FTP
+                    with open(temp_image_path, 'rb') as file:
+                        ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
+                    
+                    print(f"✅ Upload concluído: {image_data['ref']}.jpg")
+                    
+                    # Validação pós-upload
+                    try:
+                        import requests
+                        image_url = f"https://ideolog.ia.br/images/products/{image_data['ref']}.jpg"
+                        response = requests.get(image_url, timeout=10)
+                        if response.status_code == 200:
+                            if response.content.startswith(b'\xff\xd8'):
+                                print(f"✅ Validação pós-upload: JPEG válido após processamento do servidor")
+                            else:
+                                print(f"⚠️ Validação pós-upload: Arquivo não é mais JPEG válido")
+                        else:
+                            print(f"⚠️ Validação pós-upload: Não foi possível baixar arquivo")
+                    except Exception as e:
+                        print(f"⚠️ Validação pós-upload falhou: {e}")
+                    
+                    # Remove arquivo temporário
+                    os.unlink(temp_image_path)
+                    upload_successful += 1
+                    
+                except Exception as e:
+                    print(f"❌ Erro upload {image_data['ref']}: {e}")
+                    upload_failed += 1
+            
+            # Fecha FTP
+            ftp.quit()
+            print(f"🔌 FTP desconectado")
+            
+        except Exception as e:
+            print(f"❌ Erro FTP: {e}")
+            upload_failed = len(images)
+        
+        return upload_successful, upload_failed
+
+    def process_excel_simple(self, file_path):
+        """Processamento do Excel com configurações corretas para Render"""
+        try:
+            # Configuração correta para carregar imagens
+            workbook = openpyxl.load_workbook(file_path, data_only=True, read_only=False, keep_links=False)
+            worksheet = workbook.active
+            
+            print(f"📊 Planilha carregada: {worksheet.title}")
+            print(f"📏 Dimensões: {worksheet.max_row} linhas x {worksheet.max_column} colunas")
+            
+            # Extrai REFs da coluna A (linhas 4+)
+            refs = []
+            ref_count = 0
+            
+            for row in range(4, worksheet.max_row + 1):
+                cell_value = worksheet[f'A{row}'].value
+                if cell_value and str(cell_value).strip() and str(cell_value).strip().upper() not in ['TOTAL', 'SUBTOTAL']:
+                    ref_count += 1
+                    refs.append(str(cell_value).strip())
+            
+            # Processa imagens usando método robusto por anchor
+            images = []
+            total_images = len(worksheet._images)
+            
+            print(f"📊 Imagens embebidas encontradas: {total_images}")
+            
+            # Se não há imagens embebidas, tenta extrair imagens internas
+            if total_images == 0:
+                print(f"🔍 Nenhuma imagem embebida encontrada, tentando extrair imagens internas...")
+                internal_images = self.extract_internal_images(file_path)
+                
+                if internal_images:
+                    print(f"✅ {len(internal_images)} imagens internas extraídas")
+                    
+                    # Associa imagens internas às REFs por ordem
+                    for i, ref_value in enumerate(refs):
+                        if i < len(internal_images):
+                            internal_img = internal_images[i]
+                            images.append({
+                                'ref': ref_value, 
+                                'bytes': internal_img['bytes'], 
+                                'row': i + 4,  # Assume que REFs começam na linha 4
+                                'source': 'internal',
+                                'filename': internal_img['filename']
+                            })
+                            print(f"   📷 REF {ref_value} → {internal_img['filename']}")
+                        else:
+                            print(f"   ⚠️ REF {ref_value} não tem imagem correspondente")
+                else:
+                    print(f"❌ Nenhuma imagem interna encontrada")
+            else:
+                # Método original: busca imagens embebidas
+                print(f"🔍 Buscando imagens embebidas...")
+                for ref_value in refs:
+                    # Encontra a linha da REF
+                    ref_row = None
+                    for row in range(4, worksheet.max_row + 1):
+                        cell_value = worksheet[f'A{row}'].value
+                        if cell_value and str(cell_value).strip() == ref_value:
+                            ref_row = row
+                            break
+                    
+                    if ref_row:
+                        # Busca imagem na célula H{ref_row}
+                        image_bytes = self.find_image_by_cell(worksheet, f'H{ref_row}')
+                        if image_bytes:
+                            images.append({'ref': ref_value, 'bytes': image_bytes, 'row': ref_row, 'source': 'embedded'})
+            
+            workbook.close()
+            
+            # Upload real via FTP
+            upload_successful = 0
+            upload_failed = 0
+            
+            if images:
+                print(f"\n🚀 Iniciando upload de {len(images)} imagens...")
+                upload_successful, upload_failed = self.upload_images_ftp(images)
+            else:
+                print(f"\n⚠️ Nenhuma imagem encontrada para upload")
+            
+            return {
+                'success': True,
+                'total_refs': len(refs),
+                'images_found': len(images),
+                'uploads_successful': upload_successful,
+                'uploads_failed': upload_failed,
+                'error': None
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro no processamento: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'total_refs': 0,
+                'images_found': 0,
+                'uploads_successful': 0,
+                'uploads_failed': 1
+            }
+
 class SimpleUploadHandler(BaseHTTPRequestHandler):
     """Handler simplificado para o servidor de deploy"""
     
@@ -831,21 +1132,49 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             images = []
             total_images = len(worksheet._images)
             
-            # Para cada REF, busca imagem na célula H correspondente
-            for ref_value in refs:
-                # Encontra a linha da REF
-                ref_row = None
-                for row in range(4, worksheet.max_row + 1):
-                    cell_value = worksheet[f'A{row}'].value
-                    if cell_value and str(cell_value).strip() == ref_value:
-                        ref_row = row
-                        break
+            print(f"📊 Imagens embebidas encontradas: {total_images}")
+            
+            # Se não há imagens embebidas, tenta extrair imagens internas
+            if total_images == 0:
+                print(f"🔍 Nenhuma imagem embebida encontrada, tentando extrair imagens internas...")
+                internal_images = self.extract_internal_images(file_path)
                 
-                if ref_row:
-                    # Busca imagem na célula H{ref_row}
-                    image_bytes = self.find_image_by_cell(worksheet, f'H{ref_row}')
-                    if image_bytes:
-                        images.append({'ref': ref_value, 'bytes': image_bytes, 'row': ref_row})
+                if internal_images:
+                    print(f"✅ {len(internal_images)} imagens internas extraídas")
+                    
+                    # Associa imagens internas às REFs por ordem
+                    for i, ref_value in enumerate(refs):
+                        if i < len(internal_images):
+                            internal_img = internal_images[i]
+                            images.append({
+                                'ref': ref_value, 
+                                'bytes': internal_img['bytes'], 
+                                'row': i + 4,  # Assume que REFs começam na linha 4
+                                'source': 'internal',
+                                'filename': internal_img['filename']
+                            })
+                            print(f"   📷 REF {ref_value} → {internal_img['filename']}")
+                        else:
+                            print(f"   ⚠️ REF {ref_value} não tem imagem correspondente")
+                else:
+                    print(f"❌ Nenhuma imagem interna encontrada")
+            else:
+                # Método original: busca imagens embebidas
+                print(f"🔍 Buscando imagens embebidas...")
+                for ref_value in refs:
+                    # Encontra a linha da REF
+                    ref_row = None
+                    for row in range(4, worksheet.max_row + 1):
+                        cell_value = worksheet[f'A{row}'].value
+                        if cell_value and str(cell_value).strip() == ref_value:
+                            ref_row = row
+                            break
+                    
+                    if ref_row:
+                        # Busca imagem na célula H{ref_row}
+                        image_bytes = self.find_image_by_cell(worksheet, f'H{ref_row}')
+                        if image_bytes:
+                            images.append({'ref': ref_value, 'bytes': image_bytes, 'row': ref_row, 'source': 'embedded'})
             
             workbook.close()
             
@@ -876,6 +1205,49 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                 'uploads_failed': 1
             }
     
+    def extract_internal_images(self, file_path):
+        """Extrai imagens internas do arquivo Excel quando não há imagens embebidas"""
+        try:
+            import zipfile
+            
+            print(f"🔍 Extraindo imagens internas de {file_path}")
+            internal_images = []
+            
+            with zipfile.ZipFile(file_path, 'r') as zip_file:
+                # Lista arquivos de imagem
+                image_files = [f for f in zip_file.namelist() if f.startswith('xl/media/') and f.endswith('.jpg')]
+                
+                print(f"📊 Arquivos de imagem internos encontrados: {len(image_files)}")
+                
+                for i, img_file in enumerate(image_files):
+                    try:
+                        # Extrai dados da imagem
+                        img_data = zip_file.read(img_file)
+                        
+                        print(f"   📷 {img_file}: {len(img_data)} bytes")
+                        
+                        # Verifica se é JPEG válido
+                        if len(img_data) >= 8 and img_data.startswith(b'\xff\xd8'):
+                            internal_images.append({
+                                'index': i,
+                                'filename': img_file,
+                                'bytes': img_data,
+                                'size': len(img_data)
+                            })
+                            print(f"      ✅ JPEG válido")
+                        else:
+                            print(f"      ❌ JPEG inválido")
+                    
+                    except Exception as e:
+                        print(f"   ❌ Erro ao extrair {img_file}: {e}")
+            
+            print(f"✅ Total de imagens internas extraídas: {len(internal_images)}")
+            return internal_images
+            
+        except Exception as e:
+            print(f"❌ Erro ao extrair imagens internas: {e}")
+            return []
+
     def find_image_by_cell(self, worksheet, cell_addr):
         """Encontra imagem por célula usando anchor - método robusto"""
         try:
@@ -1020,7 +1392,9 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
                         
                         # Detecta formato original
                         original_format = img.format
-                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG")
+                        source_info = image_data.get('source', 'unknown')
+                        filename_info = f" ({image_data.get('filename', '')})" if 'filename' in image_data else ""
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG [{source_info}]{filename_info}")
                         
                         # Converte para RGB se necessário
                         if img.mode in ('RGBA', 'LA', 'P'):

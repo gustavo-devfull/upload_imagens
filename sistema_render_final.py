@@ -567,7 +567,9 @@ def save_image_to_temp(image, ref_value, debug_info):
 app = create_app()
 
 if __name__ == "__main__":
-    port = int(os.getenv('PORT', 10000))
+    # No Render, o gunicorn define a porta automaticamente
+    # Não precisamos definir porta manualmente
+    port = 10000  # Porta fixa para Render
     
     logger.info("🚀 Iniciando Sistema Render Final...")
     print("🚀 Iniciando Sistema Render Final...")
@@ -583,6 +585,7 @@ if __name__ == "__main__":
     print("✅ Gunicorn ativo na porta 10000")
     print("✅ Health check: /health")
     print("✅ Pronto para uploads!")
+    print("⚠️ Ignorando variável PORT do Render")
     
     if not FLASK_AVAILABLE:
         logger.error("❌ Flask não disponível")
