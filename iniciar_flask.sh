@@ -52,3 +52,4 @@ echo "⏳ Iniciando servidor..."
 
 # Inicia o servidor Flask
 PORT=$PORT python3 sistema_flask_melhorado.py
+

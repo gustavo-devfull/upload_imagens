@@ -233,3 +233,4 @@ def testar_sistema_melhorado():
 
 if __name__ == "__main__":
     testar_sistema_melhorado()
+

@@ -207,3 +207,4 @@ Para problemas ou dúvidas:
 ✅ **Configuração fácil**
 
 **Pronto para usar! Configure o FTP e comece a processar seus arquivos Excel!** 🚀
+

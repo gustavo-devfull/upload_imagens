@@ -580,3 +580,4 @@ if __name__ == "__main__":
     
     # Inicia servidor Flask
     app.run(host='0.0.0.0', port=port, debug=True)
+

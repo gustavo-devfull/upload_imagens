@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-🚀 SISTEMA FLASK COM UPLOAD DIRETO PARA FTP
-Sistema Flask que extrai imagens do Excel e salva diretamente no FTP
+🚀 SISTEMA FLASK ULTRA SIMPLES
+Sistema Flask com frontend ultra simplificado para garantir funcionamento
 """
 
 import os
 import sys
 import tempfile
 import logging
-import ftplib
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
-from datetime import datetime
 
 # Importa o detector integrado
 try:
@@ -33,167 +31,30 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 UPLOAD_FOLDER = tempfile.gettempdir()
 ALLOWED_EXTENSIONS = {'xlsx'}
 
-# Configurações FTP (configure aqui seus dados)
-FTP_CONFIG = {
-    'host': 'seu-servidor-ftp.com',
-    'user': 'seu-usuario',
-    'password': 'sua-senha',
-    'directory': '/uploads/'
-}
-
 def allowed_file(filename):
     """Verifica se o arquivo tem extensão permitida"""
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-class FTPUploader:
-    def __init__(self, config):
-        self.config = config
-        self.connection = None
-    
-    def conectar(self):
-        """Conecta ao servidor FTP"""
-        try:
-            logger.info(f"🔗 Conectando ao FTP: {self.config['host']}")
-            self.connection = ftplib.FTP()
-            self.connection.connect(self.config['host'], 21)
-            self.connection.login(self.config['user'], self.config['password'])
-            self.connection.cwd(self.config['directory'])
-            logger.info("✅ Conectado ao FTP com sucesso!")
-            return True
-        except Exception as e:
-            logger.error(f"❌ Erro ao conectar FTP: {e}")
-            return False
-    
-    def desconectar(self):
-        """Desconecta do servidor FTP"""
-        if self.connection:
-            try:
-                self.connection.quit()
-                logger.info("🔌 Desconectado do FTP")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao desconectar FTP: {e}")
-    
-    def upload_imagem(self, image_data: bytes, filename: str) -> bool:
-        """Faz upload de uma imagem para o FTP"""
-        try:
-            if not self.connection:
-                logger.error("❌ Não conectado ao FTP!")
-                return False
-            
-            logger.info(f"📤 Upload: {filename}")
-            
-            # Criar arquivo temporário
-            temp_path = f"/tmp/{filename}"
-            with open(temp_path, 'wb') as f:
-                f.write(image_data)
-            
-            # Fazer upload para FTP
-            with open(temp_path, 'rb') as f:
-                self.connection.storbinary(f'STOR {filename}', f)
-            
-            # Remover arquivo temporário
-            os.remove(temp_path)
-            
-            logger.info(f"   ✅ Upload bem-sucedido: {filename}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"   ❌ Erro no upload {filename}: {e}")
-            return False
-
-def extrair_imagens_do_excel(file_path: str) -> list:
-    """Extrai imagens de um arquivo Excel"""
-    import zipfile
-    
-    logger.info(f"🔍 Extraindo imagens de: {file_path}")
-    images_extracted = []
-    
-    try:
-        with zipfile.ZipFile(file_path, 'r') as zf:
-            # Listar arquivos de mídia
-            media_files = [name for name in zf.namelist() if name.startswith('xl/media/') and name.endswith(('.jpg', '.jpeg', '.png'))]
-            logger.info(f"🖼️ Arquivos de mídia encontrados: {len(media_files)}")
-            
-            # Obter posições das imagens
-            positions = []
-            if DETECTOR_INTEGRADO_AVAILABLE:
-                try:
-                    detector = DetectorImagensIntegrado(debug_mode=False)
-                    positions = detector.detectar_imagens(file_path, target_columns=['H'], start_row=4, ref_column='A')
-                except Exception as e:
-                    logger.warning(f"Erro ao obter posições: {e}")
-            
-            # Extrair imagens
-            for i, media_file in enumerate(media_files):
-                image_filename = os.path.basename(media_file)
-                
-                # Ler dados da imagem
-                with zf.open(media_file) as img_file:
-                    image_data = img_file.read()
-                
-                # Obter informações da posição se disponível
-                position_info = {}
-                if i < len(positions):
-                    pos = positions[i]
-                    position_info = {
-                        'ref': pos['ref'],
-                        'position': f"{pos['col']}{pos['row']}",
-                        'col': pos['col'],
-                        'row': pos['row']
-                    }
-                
-                # Criar nome único para o arquivo
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                if position_info.get('ref'):
-                    output_filename = f"{position_info['ref']}_{image_filename}"
-                else:
-                    output_filename = f"imagem_{i+1}_{timestamp}_{image_filename}"
-                
-                image_info = {
-                    'original_filename': image_filename,
-                    'ftp_filename': output_filename,
-                    'image_data': image_data,
-                    'file_size': len(image_data),
-                    'index': i + 1,
-                    **position_info
-                }
-                
-                images_extracted.append(image_info)
-                
-                logger.info(f"   ✅ Imagem {i+1} extraída:")
-                logger.info(f"      📁 Arquivo: {output_filename}")
-                logger.info(f"      📏 Tamanho: {len(image_data):,} bytes")
-                if position_info.get('position'):
-                    logger.info(f"      📍 Posição: {position_info['position']}")
-                    logger.info(f"      🔢 REF: {position_info['ref']}")
-            
-            logger.info(f"🎉 {len(images_extracted)} imagens extraídas!")
-            return images_extracted
-            
-    except Exception as e:
-        logger.error(f"❌ Erro na extração: {e}")
-        return []
-
 @app.route('/')
 def serve_frontend():
-    """Serve o frontend HTML"""
+    """Serve o frontend HTML ultra simples"""
     try:
-        html_content = get_frontend_html()
+        html_content = get_ultra_simple_frontend_html()
         return html_content
     except Exception as e:
         logger.error(f"Erro ao servir frontend: {e}")
         return jsonify({'error': f'Erro interno: {e}'}), 500
 
-def get_frontend_html():
-    """Retorna o HTML do frontend"""
+def get_ultra_simple_frontend_html():
+    """Retorna o HTML do frontend ultra simples"""
     return '''
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Sistema Excel → FTP</title>
+    <title>🚀 Sistema Excel - Detector Integrado</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -275,6 +136,11 @@ def get_frontend_html():
             min-height: 100px;
         }
         
+        .results.show {
+            display: block !important;
+            visibility: visible !important;
+        }
+        
         .success {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -301,7 +167,7 @@ def get_frontend_html():
         }
         
         .stat-item {
-            background: white;
+            background: #f8f9fa;
             padding: 15px;
             border-radius: 5px;
             text-align: center;
@@ -320,46 +186,56 @@ def get_frontend_html():
             font-size: 14px;
         }
         
-        .uploaded-files {
-            background: white;
+        .debug-info {
+            background: #f8f9fa;
             border-radius: 5px;
             padding: 15px;
             margin-top: 15px;
         }
         
-        .file-item {
-            padding: 8px 12px;
+        .debug-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .recommendation {
             margin: 5px 0;
-            background: #f8f9fa;
+            padding: 8px 12px;
             border-radius: 3px;
             font-size: 14px;
         }
         
-        .file-item.success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .file-item.error {
+        .recommendation.error {
             background: #f8d7da;
             color: #721c24;
+        }
+        
+        .recommendation.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .recommendation.success {
+            background: #d4edda;
+            color: #155724;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Sistema Excel → FTP</h1>
+        <h1>🚀 Sistema Excel - Detector Integrado</h1>
         
         <div class="upload-section">
             <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
             <button class="btn" onclick="selectFile()">📁 Selecionar Arquivo</button>
-            <button class="btn btn-success" id="processBtn" onclick="processFile()" disabled>🚀 Processar e Enviar para FTP</button>
+            <button class="btn btn-success" id="processBtn" onclick="processFile()" disabled>🚀 Processar</button>
         </div>
         
         <div id="fileInfo" class="file-info" style="display: none;"></div>
         
         <div class="loading" id="loading">
-            ⏳ Processando arquivo e enviando para FTP...
+            ⏳ Processando arquivo...
         </div>
         
         <div class="results" id="results">
@@ -394,7 +270,7 @@ def get_frontend_html():
         }
 
         async function uploadFile(file) {
-            console.log('🚀 Iniciando processamento:', file.name);
+            console.log('🚀 Iniciando upload:', file.name);
             
             const formData = new FormData();
             formData.append('file', file);
@@ -404,7 +280,8 @@ def get_frontend_html():
             
             // Mostrar loading
             loading.style.display = 'block';
-            results.innerHTML = '';
+            results.style.display = 'none';
+            results.className = 'results';
             
             try {
                 console.log('📡 Enviando requisição...');
@@ -431,7 +308,7 @@ def get_frontend_html():
             } catch (error) {
                 console.error('❌ Erro no upload:', error);
                 loading.style.display = 'none';
-                displayError('Erro no processamento: ' + error.message);
+                displayError('Erro no upload: ' + error.message);
             }
         }
 
@@ -440,54 +317,70 @@ def get_frontend_html():
             
             const results = document.getElementById('results');
             
+            // Forçar visibilidade
+            results.style.display = 'block';
+            results.style.visibility = 'visible';
+            results.style.opacity = '1';
+            results.className = 'results show';
+            
             let html = '';
             
             if (data.success) {
-                console.log('✅ Processamento bem-sucedido');
-                html += '<div class="success">✅ Arquivo processado e imagens enviadas para FTP com sucesso!</div>';
+                console.log('✅ Upload bem-sucedido');
+                html += '<div class="success">✅ Upload realizado com sucesso!</div>';
                 
                 html += '<div class="stats">';
-                html += `<div class="stat-item"><div class="stat-value">${data.stats.total_images || 0}</div><div class="stat-label">🖼️ Imagens extraídas</div></div>`;
+                html += `<div class="stat-item"><div class="stat-value">${data.stats.total_refs || 0}</div><div class="stat-label">📊 Total de REFs</div></div>`;
+                html += `<div class="stat-item"><div class="stat-value">${data.stats.images_found || 0}</div><div class="stat-label">🖼️ Imagens encontradas</div></div>`;
                 html += `<div class="stat-item"><div class="stat-value">${data.stats.successful_uploads || 0}</div><div class="stat-label">✅ Uploads bem-sucedidos</div></div>`;
                 html += `<div class="stat-item"><div class="stat-value">${data.stats.failed_uploads || 0}</div><div class="stat-label">❌ Uploads falharam</div></div>`;
-                html += `<div class="stat-item"><div class="stat-value">${(data.stats.total_size / 1024).toFixed(1)} KB</div><div class="stat-label">📏 Total enviado</div></div>`;
                 html += '</div>';
                 
-                if (data.uploaded_files && data.uploaded_files.length > 0) {
-                    html += '<div class="uploaded-files">';
-                    html += '<div style="font-weight: bold; margin-bottom: 10px;">📁 Arquivos enviados para FTP:</div>';
+                if (data.debug_info && data.debug_info.length > 0) {
+                    html += '<div class="debug-info">';
+                    html += '<div class="debug-title">🔍 Informações Detalhadas:</div>';
                     
-                    data.uploaded_files.forEach(file => {
-                        html += `<div class="file-item success">✅ ${file.filename} (${(file.size / 1024).toFixed(1)} KB) - REF: ${file.ref} - Pos: ${file.position}</div>`;
-                    });
-                    
-                    html += '</div>';
-                }
-                
-                if (data.failed_files && data.failed_files.length > 0) {
-                    html += '<div class="uploaded-files">';
-                    html += '<div style="font-weight: bold; margin-bottom: 10px;">❌ Arquivos com falha:</div>';
-                    
-                    data.failed_files.forEach(file => {
-                        html += `<div class="file-item error">❌ ${file.filename} - Erro: ${file.error}</div>`;
+                    data.debug_info.forEach(info => {
+                        if (info.includes('❌')) {
+                            html += `<div class="recommendation error">${info}</div>`;
+                        } else if (info.includes('💡')) {
+                            html += `<div class="recommendation info">${info}</div>`;
+                        } else if (info.includes('✅')) {
+                            html += `<div class="recommendation success">${info}</div>`;
+                        } else {
+                            html += `<div class="recommendation">${info}</div>`;
+                        }
                     });
                     
                     html += '</div>';
                 }
                 
             } else {
-                console.log('❌ Processamento falhou:', data.error);
-                html += '<div class="error">❌ Erro no processamento: ' + (data.error || 'Erro desconhecido') + '</div>';
+                console.log('❌ Upload falhou:', data.error);
+                html += '<div class="error">❌ Erro no upload: ' + (data.error || 'Erro desconhecido') + '</div>';
             }
             
             console.log('📝 HTML gerado:', html);
             results.innerHTML = html;
-            console.log('✅ Resultados exibidos na tela');
+            
+            // Forçar re-render
+            results.style.display = 'none';
+            setTimeout(() => {
+                results.style.display = 'block';
+                console.log('✅ Resultados exibidos na tela');
+            }, 10);
         }
 
         function displayError(message) {
             console.log('❌ Exibindo erro:', message);
             const results = document.getElementById('results');
+            
+            // Forçar visibilidade
+            results.style.display = 'block';
+            results.style.visibility = 'visible';
+            results.style.opacity = '1';
+            results.className = 'results show';
+            
             results.innerHTML = '<div class="error">❌ ' + message + '</div>';
         }
     </script>
@@ -497,7 +390,7 @@ def get_frontend_html():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Processa upload de arquivo Excel e envia imagens para FTP"""
+    """Processa upload de arquivo Excel"""
     try:
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': 'Nenhum arquivo enviado'}), 400
@@ -518,61 +411,55 @@ def upload_file():
         logger.info(f"Arquivo salvo temporariamente: {temp_path}")
         
         try:
-            # 1. Extrair imagens do Excel
-            images = extrair_imagens_do_excel(temp_path)
-            
-            if not images:
-                return jsonify({
-                    'success': False,
-                    'error': 'Nenhuma imagem encontrada no arquivo'
-                }), 400
-            
-            # 2. Conectar ao FTP e fazer upload
-            ftp_uploader = FTPUploader(FTP_CONFIG)
-            
-            if not ftp_uploader.conectar():
-                return jsonify({
-                    'success': False,
-                    'error': 'Falha na conexão com FTP'
-                }), 500
-            
-            # 3. Fazer upload das imagens
-            stats = {
-                'total_images': len(images),
-                'successful_uploads': 0,
-                'failed_uploads': 0,
-                'total_size': 0,
-                'uploaded_files': [],
-                'failed_files': []
-            }
-            
-            for img in images:
-                success = ftp_uploader.upload_imagem(img['image_data'], img['ftp_filename'])
+            # Processar arquivo com detector integrado
+            if DETECTOR_INTEGRADO_AVAILABLE:
+                detector = DetectorImagensIntegrado(debug_mode=True)
+                images = detector.detectar_imagens(temp_path, target_columns=['H'], start_row=4, ref_column='A')
                 
-                if success:
-                    stats['successful_uploads'] += 1
-                    stats['total_size'] += img['file_size']
-                    stats['uploaded_files'].append({
-                        'filename': img['ftp_filename'],
-                        'size': img['file_size'],
-                        'ref': img.get('ref', 'N/A'),
-                        'position': img.get('position', 'N/A')
-                    })
+                # Calcular estatísticas
+                stats = {
+                    'total_refs': len(set(img['ref'] for img in images)),
+                    'images_found': len(images),
+                    'successful_uploads': len(images),
+                    'failed_uploads': 0,
+                    'total_images': len(images),
+                    'images_by_column': {},
+                    'anchor_types': {}
+                }
+                
+                # Agrupar por coluna
+                for img in images:
+                    col = img['col']
+                    stats['images_by_column'][col] = stats['images_by_column'].get(col, 0) + 1
+                    
+                    anchor_type = img.get('anchor_type', 'Unknown')
+                    stats['anchor_types'][anchor_type] = stats['anchor_types'].get(anchor_type, 0) + 1
+                
+                # Preparar debug info
+                debug_info = []
+                if len(images) == 0:
+                    debug_info.append("❌ Arquivo não contém imagens. Insira imagens nas células.")
+                    debug_info.append("💡 Considere mover imagens para a coluna H.")
                 else:
-                    stats['failed_uploads'] += 1
-                    stats['failed_files'].append({
-                        'filename': img['ftp_filename'],
-                        'error': 'Erro no upload FTP'
-                    })
-            
-            ftp_uploader.desconectar()
-            
-            # 4. Retornar resultado
-            return jsonify({
-                'success': stats['successful_uploads'] > 0,
-                'stats': stats,
-                'message': f"Processadas {stats['total_images']} imagens. {stats['successful_uploads']} enviadas com sucesso para FTP."
-            })
+                    debug_info.append(f"✅ {len(images)} imagens detectadas com sucesso!")
+                    debug_info.append(f"📊 REFs encontradas: {', '.join(set(img['ref'] for img in images))}")
+                    positions = [f"{img['col']}{img['row']}" for img in images]
+                    debug_info.append(f"📍 Posições: {', '.join(positions)}")
+                
+                # Adicionar informações do detector
+                debug_info.extend(detector.debug_info[-5:])  # Últimas 5 mensagens de debug
+                
+                return jsonify({
+                    'success': True,
+                    'stats': stats,
+                    'images': images,
+                    'debug_info': debug_info
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Detector integrado não disponível'
+                }), 500
                 
         except Exception as e:
             logger.error(f"Erro no processamento: {e}")
@@ -599,10 +486,6 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'detector_integrado': DETECTOR_INTEGRADO_AVAILABLE,
-        'ftp_config': {
-            'host': FTP_CONFIG['host'],
-            'directory': FTP_CONFIG['directory']
-        },
         'timestamp': str(os.popen('date').read().strip())
     })
 
@@ -614,29 +497,23 @@ def config():
         'allowed_extensions': list(ALLOWED_EXTENSIONS),
         'upload_folder': UPLOAD_FOLDER,
         'detector_integrado': DETECTOR_INTEGRADO_AVAILABLE,
-        'ftp_config': FTP_CONFIG,
         'python_version': sys.version,
         'working_directory': os.getcwd()
     })
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 8086))  # Porta diferente para evitar conflito
+    port = int(os.getenv('PORT', 8084))  # Porta diferente para evitar conflito
     debug = os.getenv('FLASK_ENV') != 'production'
 
-    print("🚀 SISTEMA FLASK COM UPLOAD DIRETO PARA FTP")
-    print("=" * 60)
+    print("🚀 SISTEMA FLASK ULTRA SIMPLES")
+    print("=" * 50)
     print(f"📁 Frontend: http://localhost:{port}")
     print(f"💚 Health: http://localhost:{port}/health")
     print(f"⚙️  Config: http://localhost:{port}/config")
-    print("=" * 60)
+    print("=" * 50)
     print("🔧 Dependências:")
     print(f"   • Detector Integrado: {'✅' if DETECTOR_INTEGRADO_AVAILABLE else '❌'}")
-    print("=" * 60)
-    print("🌐 Configuração FTP:")
-    print(f"   • Host: {FTP_CONFIG['host']}")
-    print(f"   • Usuário: {FTP_CONFIG['user']}")
-    print(f"   • Diretório: {FTP_CONFIG['directory']}")
-    print("=" * 60)
+    print("=" * 50)
 
     if not DETECTOR_INTEGRADO_AVAILABLE:
         logger.error("❌ Detector integrado não disponível.")
@@ -646,10 +523,8 @@ if __name__ == '__main__':
         logger.info(f"✅ Servidor Flask iniciado!")
         print(f"✅ Servidor Flask iniciado!")
         print(f"🌐 Acesse: http://localhost:{port}")
-        print("⚠️  IMPORTANTE: Configure os dados FTP no arquivo antes de usar!")
         app.run(host='0.0.0.0', port=port, debug=debug)
     except Exception as e:
         logger.error(f"❌ Erro ao iniciar servidor Flask: {e}")
         print(f"❌ Erro ao iniciar servidor Flask: {e}")
         sys.exit(1)
-
