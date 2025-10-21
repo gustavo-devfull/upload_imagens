@@ -61,9 +61,11 @@ class FTPImageExtractorCorrigido(ExcelImageExtractor):
                 
                 # Filtra REFs inválidas
                 if ref_value.upper() not in refs_invalidas:
-                    # Verifica se é um código válido (contém letras e números)
-                    if any(c.isalpha() for c in ref_value) and any(c.isdigit() for c in ref_value):
+                    # Verifica se é um código válido (contém pelo menos uma letra OU pelo menos um número)
+                    # Mais flexível: aceita REFs com letras OU números (não necessariamente ambos)
+                    if any(c.isalpha() for c in ref_value) or any(c.isdigit() for c in ref_value):
                         ref_data.append((row, ref_value))
+                        logger.debug(f"REF válida aceita: {ref_value}")
                     else:
                         logger.debug(f"REF ignorada (formato inválido): {ref_value}")
                 else:
@@ -175,6 +177,16 @@ class FTPImageExtractorCorrigido(ExcelImageExtractor):
             images = self.extract_images_from_worksheet(worksheet, start_row, photo_column)
             stats['images_found'] = len(images)
             
+            # Se não encontrou imagens com openpyxl, tenta extração direta do ZIP
+            if len(images) == 0:
+                logger.info("Nenhuma imagem encontrada com openpyxl, tentando extração direta do ZIP...")
+                zip_images = self.extract_images_from_zip(excel_file_path, start_row, photo_column)
+                if zip_images and len(zip_images) > 0:
+                    logger.info(f"Encontradas {len(zip_images)} imagens via extração ZIP")
+                    # Converte para o formato esperado (linha, imagem)
+                    images = [(row, image_path) for row, image_path in zip_images]
+                    stats['images_found'] = len(images)
+            
             # Processa cada REF válida
             for ref_row, ref_value in ref_data:
                 try:
@@ -184,8 +196,13 @@ class FTPImageExtractorCorrigido(ExcelImageExtractor):
                     if image:
                         temp_path = None
                         try:
-                            # Salva imagem temporariamente
-                            temp_path = self.save_image_to_temp(image, ref_value)
+                            # Se a imagem é um caminho de arquivo (extração ZIP), usa diretamente
+                            if isinstance(image, str):
+                                temp_path = image
+                                logger.info(f"Usando imagem extraída: {temp_path}")
+                            else:
+                                # Se é um objeto Image do openpyxl, salva temporariamente
+                                temp_path = self.save_image_to_temp(image, ref_value)
                             
                             # Faz upload via FTP
                             remote_filename = f"{ref_value}.jpg"
@@ -196,8 +213,8 @@ class FTPImageExtractorCorrigido(ExcelImageExtractor):
                                 stats['uploads_failed'] += 1
                                 
                         finally:
-                            # Remove arquivo temporário se foi criado
-                            if temp_path and os.path.exists(temp_path):
+                            # Remove arquivo temporário apenas se foi criado pelo save_image_to_temp
+                            if temp_path and isinstance(image, str) and temp_path != image and os.path.exists(temp_path):
                                 try:
                                     os.remove(temp_path)
                                     logger.debug(f"Arquivo temporário removido: {temp_path}")

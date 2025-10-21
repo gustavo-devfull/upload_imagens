@@ -122,27 +122,91 @@ class ExcelImageExtractor:
         logger.info(f"Encontradas {len(images)} imagens na coluna {photo_column} (a partir da linha {start_row})")
         return images
     
-    def find_image_for_ref(self, ref_row: int, images: List[Tuple[int, Image]], tolerance: int = 2) -> Optional[Image]:
+    def extract_images_from_zip(self, excel_file_path: str, start_row: int = 4, photo_column: str = 'H') -> List[Tuple[int, str]]:
+        """
+        Extrai imagens diretamente do arquivo ZIP quando openpyxl falha
+        
+        Args:
+            excel_file_path: Caminho do arquivo Excel
+            start_row: Linha inicial para considerar imagens
+            photo_column: Coluna onde estão as imagens
+            
+        Returns:
+            Lista de tuplas (linha, caminho_da_imagem)
+        """
+        import zipfile
+        import tempfile
+        import os
+        
+        images = []
+        
+        try:
+            with zipfile.ZipFile(excel_file_path, 'r') as zip_file:
+                # Lista arquivos de mídia
+                media_files = [f for f in zip_file.namelist() if f.startswith('xl/media/') and f.endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp'))]
+                
+                logger.info(f"Encontradas {len(media_files)} imagens no arquivo ZIP")
+                
+                for i, media_file in enumerate(media_files):
+                    try:
+                        # Extrai a imagem
+                        image_data = zip_file.read(media_file)
+                        
+                        # Cria arquivo temporário
+                        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(media_file)[1])
+                        temp_file.write(image_data)
+                        temp_file.close()
+                        
+                        # Para este método, assumimos que as imagens estão nas linhas sequenciais
+                        # começando da linha especificada
+                        image_row = start_row + i
+                        
+                        images.append((image_row, temp_file.name))
+                        logger.info(f"✅ Imagem extraída: linha {image_row}, arquivo: {temp_file.name}")
+                        
+                    except Exception as e:
+                        logger.error(f"Erro ao extrair imagem {media_file}: {e}")
+                        
+        except Exception as e:
+            logger.error(f"Erro ao ler arquivo ZIP: {e}")
+            
+        return images
+    
+    def find_image_for_ref(self, ref_row: int, images: List[Tuple[int, any]], tolerance: int = 5) -> Optional[any]:
         """
         Encontra a imagem mais próxima de uma linha REF
         
         Args:
             ref_row: Linha da coluna REF
-            images: Lista de imagens extraídas
+            images: Lista de imagens extraídas (pode ser objetos Image ou caminhos de arquivo)
             tolerance: Tolerância para considerar imagem próxima
             
         Returns:
             Imagem mais próxima ou None
         """
+        if not images:
+            logger.debug(f"Nenhuma imagem disponível para REF linha {ref_row}")
+            return None
+            
         closest_image = None
         min_distance = float('inf')
         
+        logger.debug(f"Procurando imagem para REF na linha {ref_row} com tolerância {tolerance}")
+        
         for img_row, image in images:
             distance = abs(img_row - ref_row)
+            logger.debug(f"Imagem na linha {img_row}, distância: {distance}")
+            
             if distance <= tolerance and distance < min_distance:
                 min_distance = distance
                 closest_image = image
+                logger.debug(f"Nova imagem mais próxima encontrada na linha {img_row} (distância: {distance})")
                 
+        if closest_image:
+            logger.info(f"✅ Imagem encontrada para REF linha {ref_row} (distância: {min_distance})")
+        else:
+            logger.warning(f"❌ Nenhuma imagem encontrada para REF linha {ref_row} dentro da tolerância {tolerance}")
+            
         return closest_image
     
     def save_image_to_temp(self, image: Image, ref_value: str) -> str:
