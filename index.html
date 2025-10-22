@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Upload de Imagens Excel - FTP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,8 +18,8 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Archivo', sans-serif;
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -31,7 +34,7 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             color: white;
             padding: 30px;
             text-align: center;
@@ -53,7 +56,7 @@
         }
 
         .upload-area {
-            border: 3px dashed #667eea;
+            border: 3px dashed rgb(1, 117, 166);
             border-radius: 15px;
             padding: 40px;
             text-align: center;
@@ -63,19 +66,19 @@
         }
 
         .upload-area:hover {
-            border-color: #764ba2;
-            background: #f8f9ff;
+            border-color: rgb(1, 117, 166);
+            background: rgba(1, 117, 166, 0.05);
         }
 
         .upload-area.dragover {
-            border-color: #764ba2;
-            background: #f0f2ff;
+            border-color: rgb(1, 117, 166);
+            background: rgba(1, 117, 166, 0.1);
             transform: scale(1.02);
         }
 
         .upload-icon {
             font-size: 4rem;
-            color: #667eea;
+            color: rgb(1, 117, 166);
             margin-bottom: 20px;
         }
 
@@ -95,7 +98,7 @@
         }
 
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -108,7 +111,7 @@
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 20px rgba(1, 117, 166, 0.3);
         }
 
         .btn:disabled {
@@ -118,7 +121,9 @@
         }
 
         .btn-secondary {
-            background: #6c757d;
+            background: rgba(1, 117, 166, 0.2);
+            color: rgb(1, 117, 166);
+            border: 2px solid rgb(1, 117, 166);
         }
 
         .progress-container {
@@ -137,7 +142,7 @@
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             width: 0%;
             transition: width 0.3s ease;
         }
@@ -196,7 +201,7 @@
         }
 
         .copy-btn {
-            background: #28a745;
+            background: rgb(1, 117, 166);
             color: white;
             border: none;
             padding: 8px 15px;
@@ -207,26 +212,26 @@
         }
 
         .copy-btn:hover {
-            background: #218838;
+            background: rgba(1, 117, 166, 0.8);
             transform: translateY(-1px);
         }
 
         .error {
-            background: #f8d7da;
-            color: #721c24;
+            background: rgba(1, 117, 166, 0.1);
+            color: rgb(1, 117, 166);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
-            border: 1px solid #f5c6cb;
+            border: 1px solid rgba(1, 117, 166, 0.3);
         }
 
         .success {
-            background: #d4edda;
-            color: #155724;
+            background: rgba(1, 117, 166, 0.1);
+            color: rgb(1, 117, 166);
             padding: 15px;
             border-radius: 10px;
             margin: 20px 0;
-            border: 1px solid #c3e6cb;
+            border: 1px solid rgba(1, 117, 166, 0.3);
         }
 
         .stats {
@@ -247,7 +252,7 @@
         .stat-number {
             font-size: 2rem;
             font-weight: bold;
-            color: #667eea;
+            color: rgb(1, 117, 166);
             margin-bottom: 5px;
         }
 
@@ -257,15 +262,15 @@
         }
 
         .info-box {
-            background: #e3f2fd;
-            border: 1px solid #bbdefb;
+            background: rgba(1, 117, 166, 0.1);
+            border: 1px solid rgba(1, 117, 166, 0.3);
             border-radius: 10px;
             padding: 20px;
             margin: 20px 0;
         }
 
         .info-box h3 {
-            color: #1976d2;
+            color: rgb(1, 117, 166);
             margin-bottom: 10px;
         }
 
@@ -504,7 +509,7 @@
 
                         {results && (
                             <div className="results show">
-                                <h3 style={{ marginBottom: '20px', color: '#333' }}>📊 Resultados do Processamento</h3>
+                                <h3 style={{ marginBottom: '20px', color: 'rgb(1, 117, 166)' }}>📊 Resultados do Processamento</h3>
                                 
                                 <div className="stats">
                                     <div className="stat-card">
@@ -527,7 +532,7 @@
 
                                 {results.images && results.images.length > 0 && (
                                     <div>
-                                        <h4 style={{ marginBottom: '15px', color: '#333' }}>🖼️ Imagens Processadas</h4>
+                                        <h4 style={{ marginBottom: '15px', color: 'rgb(1, 117, 166)' }}>🖼️ Imagens Processadas</h4>
                                         {results.images.map((image, index) => (
                                             <div key={index} className="result-item">
                                                 <img 
@@ -555,7 +560,7 @@
 
                                 {results.errors && results.errors.length > 0 && (
                                     <div style={{ marginTop: '20px' }}>
-                                        <h4 style={{ marginBottom: '15px', color: '#dc3545' }}>⚠️ Erros Encontrados</h4>
+                                        <h4 style={{ marginBottom: '15px', color: 'rgb(1, 117, 166)' }}>⚠️ Erros Encontrados</h4>
                                         {results.errors.map((error, index) => (
                                             <div key={index} className="error" style={{ marginBottom: '10px' }}>
                                                 {error}
