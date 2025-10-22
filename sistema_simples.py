@@ -360,6 +360,8 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Upload de Imagens Excel - Simplificado</title>
+        <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
         * {
             margin: 0;
@@ -368,8 +370,8 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Archivo', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -384,7 +386,7 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, rgb(1, 117, 166) 0%, rgb(0, 80, 120) 100%);
             color: white;
             padding: 30px;
             text-align: center;
@@ -677,8 +679,8 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🖼️ Sistema de Upload de Imagens Excel</h1>
-            <p>Sistema Simplificado - Versão para Deploy</p>
+            <h1>Sistema de Upload de Imagens para Cotações</h1>
+            <p>Subir imagens para o FTP e vincular as imagens às cotações</p>
         </div>
 
         <div class="content">
