@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Arquivos temporários
+*.log
+*.tmp
+*.temp
+.DS_Store
+
+# Arquivos de teste
+test_*.py
+*_test.py
+debug*.py
+investigate*.py
+extract*.py
+
+# Arquivos Excel de teste
+*.xlsx
+!requirements.txt
+
+# Documentação
+*.md
+!README.md
+
+# Scripts de instalação
+*.sh
+install*.sh
+
+# Configurações locais
+.env
+.env.local
+
