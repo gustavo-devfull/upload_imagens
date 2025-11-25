@@ -153,9 +153,9 @@ class SistemaExcelProcessor:
         
         try:
             # Configurações FTP
-            ftp_host = "ftp.ideolog.ia.br"
-            ftp_user = "ideologia"
-            ftp_pass = "Ideolog2024!"
+            ftp_host = os.getenv('FTP_HOST', "46.202.90.62")
+            ftp_user = os.getenv('FTP_USER', "u715606397.ideolog.ia.br")
+            ftp_pass = os.getenv('FTP_PASSWORD', "27y8rYoDq=Q&aHk:")
             ftp_path = "/images/products/"
             
             print(f"🔗 Conectando FTP: {ftp_host}")
@@ -174,9 +174,27 @@ class SistemaExcelProcessor:
                     # Cria arquivo temporário
                     temp_image_path = f"/tmp/{image_data['ref']}.jpg"
                     
-                    # Abre a imagem dos bytes
-                    image_stream = io.BytesIO(image_data['bytes'])
-                    img = Image.open(image_stream)
+                    # Tenta usar PIL se disponível
+                    try:
+                        from PIL import Image
+                        import io
+                        # Abre a imagem dos bytes
+                        image_stream = io.BytesIO(image_data['bytes'])
+                        img = Image.open(image_stream)
+                    except ImportError:
+                        # Se PIL não estiver disponível, salva bytes diretamente
+                        with open(temp_image_path, 'wb') as f:
+                            f.write(image_data['bytes'])
+                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (sem conversão PIL)")
+                        # Faz upload direto
+                        with open(temp_image_path, 'rb') as file:
+                            ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
+                        print(f"✅ Upload concluído: {image_data['ref']}.jpg")
+                        os.unlink(temp_image_path)
+                        upload_successful += 1
+                        continue
+                    
+                    # Continua com PIL se disponível
                     
                     # Detecta formato original
                     original_format = img.format
@@ -335,12 +353,16 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Serve o frontend"""
-        if self.path == '/':
+        if self.path == '/' or self.path == '/index.html':
             self.serve_frontend()
         elif self.path == '/config':
             self.serve_config()
         elif self.path == '/health':
             self.serve_health()
+        elif self.path == '/favicon.ico':
+            # Retorna 204 No Content para favicon (evita erro 404)
+            self.send_response(204)
+            self.end_headers()
         else:
             self.send_error(404)
     
@@ -1183,18 +1205,23 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
             # Upload real via FTP
             upload_successful = 0
             upload_failed = 0
+            errors = []
             
             if images:
                 upload_successful, upload_failed = self.upload_images_ftp(images)
+                
+                # Se todos os uploads falharam, adiciona mensagem de erro
+                if upload_successful == 0 and upload_failed > 0:
+                    errors.append("Falha no upload FTP. Verifique as credenciais FTP (usuário e senha).")
             
             return {
-                'success': True,
+                'success': upload_successful > 0,
                 'total_refs': ref_count,
                 'images_found': len(images),
                 'uploads_successful': upload_successful,
                 'uploads_failed': upload_failed,
-                'errors': [],
-                'message': 'Processamento com configurações corretas concluído'
+                'errors': errors,
+                'message': f'Processamento concluído: {upload_successful} upload(s) bem-sucedido(s), {upload_failed} falha(s)'
             }
             
         except Exception as e:
@@ -1319,147 +1346,239 @@ class SimpleUploadHandler(BaseHTTPRequestHandler):
         upload_successful = 0
         upload_failed = 0
         
+        if not FTP_AVAILABLE:
+            print("❌ FTP não disponível")
+            return 0, len(images)
+        
         try:
-            # Configurações FTP
-            ftp_configs = [
-                {"host": "46.202.90.62", "port": 21, "user": "u715606397.ideolog.ia.br", "pass": "]X9CC>t~ihWhdzNq"},
-                {"host": "46.202.90.62", "port": 21, "user": "u715606397", "pass": "]X9CC>t~ihWhdzNq"},
-            ]
+            # Configurações FTP (pode ser sobrescrito por variáveis de ambiente)
+            ftp_host = os.getenv('FTP_HOST', "46.202.90.62")
+            ftp_user = os.getenv('FTP_USER', "u715606397.ideolog.ia.br")
+            ftp_pass = os.getenv('FTP_PASSWORD', "27y8rYoDq=Q&aHk:")
             
-            ftp_config = None
-            for config in ftp_configs:
-                try:
-                    ftp = ftplib.FTP()
-                    ftp.connect(config['host'], config['port'], timeout=15)
-                    ftp.login(config['user'], config['pass'])
-                    ftp.quit()
-                    ftp_config = config
-                    break
-                except Exception as e:
-                    continue
-            
-            if not ftp_config:
-                return 0, len(images)
+            print(f"🔗 Conectando FTP: {ftp_host}")
+            print(f"👤 Usuário: {ftp_user}")
             
             # Conecta com timeout maior para muitos uploads
-            ftp = ftplib.FTP()
-            timeout = 60 if len(images) > 30 else 30  # Timeout maior para muitos uploads
-            ftp.connect(ftp_config['host'], ftp_config['port'], timeout=timeout)
-            ftp.login(ftp_config['user'], ftp_config['pass'])
-            
-            # Vai direto para o diretório raiz e cria estrutura correta
-            ftp.cwd('/')  # Volta para raiz
-            
-            # Cria estrutura: public_html/images/products
-            try:
-                ftp.cwd('public_html')
-            except:
-                ftp.mkd('public_html')
-                ftp.cwd('public_html')
-            
-            try:
-                ftp.cwd('images')
-            except:
-                ftp.mkd('images')
-                ftp.cwd('images')
-            
-            try:
-                ftp.cwd('products')
-            except:
-                ftp.mkd('products')
-                ftp.cwd('products')
-            
-            # Debug: mostra diretório atual
-            print(f"📁 Diretório atual FTP: {ftp.pwd()}")
-            
-            # Upload das imagens com progresso
-            total_images = len(images)
-            for i, image_data in enumerate(images):
+            timeout = 300 if len(images) > 30 else 60  # Timeout maior para muitos uploads
+            with ftplib.FTP(timeout=timeout) as ftp:
+                ftp.connect(ftp_host, 21)
+                print(f"✅ Conexão estabelecida")
+                
                 try:
-                    # Converte e salva imagem como JPEG válido
-                    safe_ref = "".join(c for c in image_data['ref'] if c.isalnum() or c in ('-', '_')).rstrip()
-                    if not safe_ref:
-                        safe_ref = f"image_{int(time.time())}"
-                    
-                    temp_image_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
-                    
-                    # Converte bytes para imagem válida usando PIL
-                    try:
-                        from PIL import Image
-                        import io
-                        
-                        # Abre a imagem dos bytes
-                        image_stream = io.BytesIO(image_data['bytes'])
-                        img = Image.open(image_stream)
-                        
-                        # Detecta formato original
-                        original_format = img.format
-                        source_info = image_data.get('source', 'unknown')
-                        filename_info = f" ({image_data.get('filename', '')})" if 'filename' in image_data else ""
-                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG [{source_info}]{filename_info}")
-                        
-                        # Converte para RGB se necessário
-                        if img.mode in ('RGBA', 'LA', 'P'):
-                            img = img.convert('RGB')
-                        
-                        # Salva como JPEG com configurações máximas para contornar processamento do servidor
-                        img.save(temp_image_path, 'JPEG', quality=100, optimize=False, progressive=False, subsampling=0)
-                        
-                        print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
-                        
-                    except Exception as e:
-                        print(f"❌ Erro na conversão PIL: {e}")
-                        # Fallback: salva bytes originais (pode não funcionar no Photoshop)
-                        with open(temp_image_path, 'wb') as f:
-                            f.write(image_data['bytes'])
-                        print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback - pode não abrir no Photoshop)")
-                        print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
-                    
-                    # Upload via FTP com timeout individual
-                    with open(temp_image_path, 'rb') as file:
-                        # Usa TYPE I para modo binário
-                        ftp.voidcmd('TYPE I')
-                        ftp.storbinary(f'STOR {image_data["ref"]}.jpg', file)
-                    
-                    # Remove arquivo temporário
-                    try:
-                        os.remove(temp_image_path)
-                    except:
-                        pass
-                    
-                    # Validação pós-upload: verifica se arquivo processado pelo servidor ainda funciona
-                    try:
-                        import requests
-                        image_url = f"https://ideolog.ia.br/images/products/{image_data['ref']}.jpg"
-                        
-                        # Baixa arquivo processado pelo servidor
-                        response = requests.get(image_url, timeout=10)
-                        if response.status_code == 200:
-                            # Verifica se ainda é JPEG válido
-                            if response.content.startswith(b'\xff\xd8'):
-                                print(f"✅ Validação pós-upload: JPEG válido após processamento do servidor")
-                            else:
-                                print(f"⚠️ Validação pós-upload: Arquivo não é mais JPEG válido")
-                        else:
-                            print(f"⚠️ Validação pós-upload: Não foi possível baixar arquivo")
-                    except Exception as e:
-                        print(f"⚠️ Validação pós-upload falhou: {e}")
-                    
-                    upload_successful += 1
-                    
-                    # Log de progresso para muitos uploads
-                    if total_images > 30 and (i + 1) % 10 == 0:
-                        print(f"📤 Upload progress: {i + 1}/{total_images} ({((i + 1) / total_images) * 100:.1f}%)")
-                    
+                    ftp.login(ftp_user, ftp_pass)
+                    print(f"✅ Login bem-sucedido")
+                except ftplib.error_perm as e:
+                    print(f"❌ Erro de autenticação FTP: {e}")
+                    print(f"💡 Verifique se as credenciais estão corretas:")
+                    print(f"   Host: {ftp_host}")
+                    print(f"   User: {ftp_user}")
+                    print(f"   Password: {'*' * len(ftp_pass)}")
+                    return 0, len(images)
                 except Exception as e:
-                    upload_failed += 1
-                    print(f"❌ Erro no upload {image_data['ref']}: {e}")
+                    print(f"❌ Erro ao fazer login FTP: {e}")
+                    return 0, len(images)
+                
+                # Navega para o diretório raiz primeiro
+                try:
+                    ftp.cwd('/')
+                    print(f"📁 Diretório raiz: {ftp.pwd()}")
+                except Exception as e:
+                    print(f"⚠️ Aviso ao navegar para raiz: {e}")
+                
+                # Cria estrutura: public_html/images/products
+                directories = ['public_html', 'images', 'products']
+                current_path = []
+                
+                for dir_name in directories:
+                    try:
+                        # Tenta criar o diretório
+                        try:
+                            ftp.mkd(dir_name)
+                            print(f"📁 Diretório '{dir_name}' criado")
+                        except ftplib.error_perm as e:
+                            if '550' in str(e) or 'already exists' in str(e).lower():
+                                print(f"📁 Diretório '{dir_name}' já existe")
+                            else:
+                                raise
+                        
+                        # Navega para o diretório
+                        ftp.cwd(dir_name)
+                        current_path.append(dir_name)
+                        print(f"📁 Navegou para: {'/'.join(current_path)}")
+                        
+                    except Exception as e:
+                        print(f"❌ Erro ao criar/navegar para '{dir_name}': {e}")
+                        # Tenta navegar mesmo assim (pode já existir)
+                        try:
+                            ftp.cwd(dir_name)
+                            current_path.append(dir_name)
+                            print(f"📁 Navegou para: {'/'.join(current_path)}")
+                        except Exception as e2:
+                            print(f"❌ Erro ao navegar para '{dir_name}': {e2}")
+                            return 0, len(images)
+                
+                # Verifica se chegou no diretório correto
+                final_path = ftp.pwd()
+                print(f"📁 Diretório final FTP: {final_path}")
+                
+                # Garante que está no caminho correto
+                if 'products' not in final_path:
+                    print(f"⚠️ Aviso: Diretório atual não contém 'products'")
+                    print(f"   Tentando navegar diretamente...")
+                    try:
+                        ftp.cwd('/public_html/images/products')
+                        print(f"✅ Navegou diretamente para: {ftp.pwd()}")
+                    except Exception as e:
+                        print(f"❌ Erro ao navegar diretamente: {e}")
+                        return 0, len(images)
             
-            ftp.quit()
+                # Verifica novamente o diretório antes de fazer uploads
+                current_dir = ftp.pwd()
+                print(f"📁 Diretório atual antes dos uploads: {current_dir}")
+                
+                # Garante que está em public_html/images/products
+                if not current_dir.endswith('products') and 'products' not in current_dir:
+                    print(f"⚠️ Diretório não está em products, tentando navegar...")
+                    try:
+                        # Tenta diferentes caminhos
+                        paths_to_try = [
+                            '/public_html/images/products',
+                            'public_html/images/products',
+                            './public_html/images/products'
+                        ]
+                        for path in paths_to_try:
+                            try:
+                                ftp.cwd(path)
+                                print(f"✅ Navegou para: {ftp.pwd()}")
+                                break
+                            except:
+                                continue
+                        else:
+                            print(f"❌ Não foi possível navegar para products")
+                            return 0, len(images)
+                    except Exception as e:
+                        print(f"❌ Erro ao navegar: {e}")
+                        return 0, len(images)
+                
+                # Upload das imagens com progresso
+                total_images = len(images)
+                for i, image_data in enumerate(images):
+                    try:
+                        # Converte e salva imagem como JPEG válido
+                        safe_ref = "".join(c for c in image_data['ref'] if c.isalnum() or c in ('-', '_')).rstrip()
+                        if not safe_ref:
+                            safe_ref = f"image_{int(time.time())}"
+                        
+                        temp_image_path = os.path.join(tempfile.gettempdir(), f"{safe_ref}.jpg")
+                        
+                        # Converte bytes para imagem válida usando PIL
+                        try:
+                            from PIL import Image
+                            import io
+                            
+                            # Abre a imagem dos bytes
+                            image_stream = io.BytesIO(image_data['bytes'])
+                            img = Image.open(image_stream)
+                            
+                            # Detecta formato original
+                            original_format = img.format
+                            source_info = image_data.get('source', 'unknown')
+                            filename_info = f" ({image_data.get('filename', '')})" if 'filename' in image_data else ""
+                            print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes ({original_format}) → JPEG [{source_info}]{filename_info}")
+                            
+                            # Converte para RGB se necessário
+                            if img.mode in ('RGBA', 'LA', 'P'):
+                                img = img.convert('RGB')
+                            
+                            # Salva como JPEG com configurações máximas para contornar processamento do servidor
+                            img.save(temp_image_path, 'JPEG', quality=100, optimize=False, progressive=False, subsampling=0)
+                            
+                            print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
+                            
+                        except ImportError:
+                            print(f"⚠️ PIL não disponível, usando bytes originais")
+                            # Fallback: salva bytes originais
+                            with open(temp_image_path, 'wb') as f:
+                                f.write(image_data['bytes'])
+                            print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (sem conversão)")
+                            print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
+                        except Exception as e:
+                            print(f"❌ Erro na conversão PIL: {e}")
+                            # Fallback: salva bytes originais
+                            with open(temp_image_path, 'wb') as f:
+                                f.write(image_data['bytes'])
+                            print(f"📤 Upload {image_data['ref']}: {len(image_data['bytes'])} bytes (fallback)")
+                            print(f"🌐 URL: https://ideolog.ia.br/images/products/{image_data['ref']}.jpg")
+                        
+                        # Verifica se arquivo foi criado
+                        if not os.path.exists(temp_image_path):
+                            print(f"❌ Arquivo temporário não foi criado: {temp_image_path}")
+                            upload_failed += 1
+                            continue
+                        
+                        file_size = os.path.getsize(temp_image_path)
+                        if file_size == 0:
+                            print(f"❌ Arquivo temporário está vazio: {temp_image_path}")
+                            upload_failed += 1
+                            continue
+                        
+                        # Upload via FTP
+                        remote_filename = f"{image_data['ref']}.jpg"
+                        current_ftp_dir = ftp.pwd()
+                        full_path = f"{current_ftp_dir}/{remote_filename}"
+                        print(f"📤 Fazendo upload FTP:")
+                        print(f"   Arquivo: {remote_filename}")
+                        print(f"   Tamanho: {file_size} bytes")
+                        print(f"   Caminho completo: {full_path}")
+                        
+                        with open(temp_image_path, 'rb') as file:
+                            ftp.storbinary(f'STOR {remote_filename}', file)
+                        
+                        # Verifica se arquivo foi salvo
+                        final_dir = ftp.pwd()
+                        print(f"✅ Upload concluído: {remote_filename}")
+                        print(f"   Salvo em: {final_dir}/{remote_filename}")
+                        print(f"   URL: https://ideolog.ia.br/images/products/{remote_filename}")
+                        
+                        # Remove arquivo temporário
+                        try:
+                            os.remove(temp_image_path)
+                        except:
+                            pass
+                        
+                        upload_successful += 1
+                        
+                        # Log de progresso para muitos uploads
+                        if total_images > 30 and (i + 1) % 10 == 0:
+                            print(f"📤 Upload progress: {i + 1}/{total_images} ({((i + 1) / total_images) * 100:.1f}%)")
+                        
+                    except Exception as e:
+                        upload_failed += 1
+                        print(f"❌ Erro no upload {image_data.get('ref', 'unknown')}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                print(f"🔌 FTP desconectado")
             
+        except ftplib.error_perm as e:
+            upload_failed = len(images)
+            error_msg = str(e)
+            print(f"❌ Erro de permissão FTP: {error_msg}")
+            if "530" in error_msg or "Login incorrect" in error_msg:
+                print(f"💡 PROBLEMA: Credenciais FTP incorretas!")
+                print(f"   Verifique se o usuário e senha estão corretos")
+                print(f"   Você pode configurar via variáveis de ambiente:")
+                print(f"   export FTP_HOST='46.202.90.62'")
+                print(f"   export FTP_USER='seu_usuario'")
+                print(f"   export FTP_PASSWORD='sua_senha'")
+            import traceback
+            traceback.print_exc()
         except Exception as e:
             upload_failed = len(images)
             print(f"❌ Erro geral no FTP: {e}")
+            import traceback
+            traceback.print_exc()
         
         return upload_successful, upload_failed
     
